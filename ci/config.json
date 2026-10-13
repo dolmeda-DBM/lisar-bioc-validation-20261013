@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "repository": "dolmeda-DBM/lisar-bioc-validation-20261013",
+  "allow_shiny_backend": true,
+  "backend_supplement_when_shiny_excluded": false,
+  "execution_priority": "low",
+  "workers": 2,
+  "bioccheck": "not_run_previous_separate_gate",
+  "artifact_retention_days": 1
+}

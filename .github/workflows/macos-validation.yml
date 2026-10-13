@@ -1,0 +1,90 @@
+name: Experimental lisaR macOS validation
+on:
+  workflow_dispatch:
+    inputs:
+      expected_head_sha:
+        description: Exact reviewed upload commit
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x86_64
+          - runner: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    env:
+      execution_priority: low
+      LISAR_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+      LISAR_EXPECTED_ARCH: ${{ matrix.arch }}
+      EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+      NCPUS: '2'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MAKEFLAGS: '-j1'
+      R_KEEP_PKG_SOURCE: 'yes'
+    steps:
+      - name: Exact reviewed checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.expected_head_sha }}
+      - name: Verify public runner, candidate archive and original oracles
+        id: initialize
+        run: python3 ci/runner.py initialize
+      - name: Pinned project R
+        uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          use-public-rspm: false
+      - name: Official XQuartz dependencies
+        shell: bash
+        run: bash ci/install-xquartz.sh > "$LISAR_VALIDATION_ROOT/xquartz-install.log" 2>&1
+      - name: Verify canonical R and parse driver before provisioning
+        shell: bash
+        run: Rscript --vanilla -e 'stopifnot(getRversion() == "4.6.1"); parse(file = "ci/provision.R"); print(R.version.string)' > "$LISAR_VALIDATION_ROOT/R-static-preflight.log" 2>&1
+      - name: Pandoc for complete vignettes
+        uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - name: TinyTeX for native PDF manual
+        uses: r-lib/actions/setup-tinytex@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - name: Isolated complete dependency library including Shiny backend
+        id: provision
+        shell: bash
+        run: Rscript --vanilla ci/provision.R > "$LISAR_VALIDATION_ROOT/provision.log" 2>&1
+      - name: Native ordinary check on exact input
+        id: ordinary
+        if: ${{ always() && steps.provision.outcome == 'success' }}
+        run: python3 ci/runner.py check ordinary-default
+      - name: Native BBS longtests on same exact input
+        id: longtests
+        if: ${{ always() && steps.provision.outcome == 'success' }}
+        run: python3 ci/runner.py check longtests-default
+      - name: Preserve stage outcomes
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        env:
+          ORDINARY_OUTCOME: ${{ steps.ordinary.outcome }}
+          LONGTESTS_OUTCOME: ${{ steps.longtests.outcome }}
+          PROVISION_OUTCOME: ${{ steps.provision.outcome }}
+        run: |
+          python3 -c 'import json,os,pathlib; pathlib.Path(os.environ["LISAR_VALIDATION_ROOT"],"stage-outcomes.json").write_text(json.dumps({k:os.environ[k] for k in ("PROVISION_OUTCOME","ORDINARY_OUTCOME","LONGTESTS_OUTCOME")},indent=2)+"\n")'
+      - name: Preserve original diagnostics and manifests
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        run: python3 ci/runner.py collect
+      - name: Upload bounded public package evidence
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.LISAR_VALIDATION_ROOT }}/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
