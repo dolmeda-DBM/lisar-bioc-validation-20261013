@@ -24,7 +24,20 @@ pins <- c(fgsea = "1.39.2", hommel = "1.8", BH = "1.90.0-1", Rcpp = "1.1.2",
   SummarizedExperiment = "1.43.0", S4Arrays = "1.13.2", DelayedArray = "0.39.8", SparseArray = "1.13.4")
 observed_versions <- vapply(names(pins), function(package)
   as.character(utils::packageVersion(package)), character(1))
-stopifnot(identical(unname(observed_versions), unname(pins)))
+observed_description_versions <- vapply(names(pins), function(package)
+  utils::packageDescription(package, fields = "Version"), character(1))
+version_matches <- stats::setNames(
+  package_version(unname(observed_versions)) == package_version(unname(pins)), names(pins))
+jsonlite::write_json(list(status = "VERSION_PIN_OBSERVATIONS_NOT_PACKAGE_PASS",
+  variant = variant, repository = Sys.getenv("GITHUB_REPOSITORY"),
+  run_id = Sys.getenv("GITHUB_RUN_ID"), head_sha = Sys.getenv("GITHUB_SHA"),
+  raw_pins = as.list(pins),
+  normalized_pins = as.list(stats::setNames(as.character(package_version(unname(pins))), names(pins))),
+  observed_package_versions = as.list(observed_versions),
+  observed_DESCRIPTION_versions = as.list(observed_description_versions),
+  exact_package_version_matches = as.list(version_matches)),
+  file.path(output, "version-observations.json"), pretty = TRUE, auto_unbox = TRUE, digits = NA)
+stopifnot(all(version_matches))
 warnings_seen <- character()
 failure <- NULL
 result <- list(status = "DIAGNOSTIC_ONLY_NOT_FULL_NATIVE_PACKAGE_PASS",
