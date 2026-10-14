@@ -6,6 +6,7 @@
 // 1.90.0-1 Boost headers. Boost copyright/license retained in probe3-licenses.
 // No expected numerical value, correction table, statistical change or rounding.
 #pragma once
+#include <memory>
 #include <boost/multiprecision/fwd.hpp>
 #include <boost/math/policies/policy.hpp>
 #include <boost/math/tools/big_constant.hpp>
