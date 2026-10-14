@@ -1,0 +1,90 @@
+name: Experimental lisaR ARM64 numerical diagnosis
+on:
+  workflow_dispatch:
+    inputs:
+      expected_head_sha:
+        description: Exact independently reviewed diagnostic commit
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  probe:
+    name: ARM64 binary and same-source numerical probe
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      execution_priority: low
+      LISAR_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+      LISAR_EXPECTED_ARCH: arm64
+      EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+      NCPUS: '2'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MAKEFLAGS: '-j1'
+      R_KEEP_PKG_SOURCE: 'yes'
+    steps:
+      - name: Exact reviewed checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.expected_head_sha }}
+      - name: Verify native public runner and unchanged candidate
+        id: initialize
+        run: python3 ci/runner.py initialize
+      - name: Pinned project R
+        uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05
+        with:
+          r-version: '4.6.1'
+          use-public-rspm: false
+      - name: Official XQuartz dependencies
+        run: bash ci/install-xquartz.sh > "$LISAR_VALIDATION_ROOT/xquartz-install.log" 2>&1
+      - name: Native R and diagnostic parse before provisioning
+        run: Rscript --vanilla -e 'stopifnot(getRversion() == "4.6.1"); parse(file="ci/provision.R"); parse(file="ci/native_probe.R"); print(R.version.string)' > "$LISAR_VALIDATION_ROOT/probe-R-static-preflight.log" 2>&1
+      - name: Pandoc
+        uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05
+      - name: TinyTeX
+        uses: r-lib/actions/setup-tinytex@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05
+      - name: Isolated complete pinned candidate dependency provisioning
+        id: provision
+        run: Rscript --vanilla ci/provision.R > "$LISAR_VALIDATION_ROOT/provision.log" 2>&1
+      - name: Original binary versus same-source default and strict FP builds
+        id: probe
+        run: bash ci/native_probe.sh
+      - name: Preserve bounded diagnostic identity and original evidence
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        env:
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
+          PROVISION_OUTCOME: ${{ steps.provision.outcome }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,shutil
+          root=pathlib.Path(os.environ['LISAR_VALIDATION_ROOT']).resolve(strict=True)
+          assert root.parent==pathlib.Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+          probe=root/'probe'
+          probe.mkdir(exist_ok=True)
+          for path in root.iterdir():
+              if path.is_file() and not path.is_symlink() and path.suffix in ('.json','.log','.txt'):
+                  shutil.copy2(path,probe/path.name)
+          files=[]
+          for path in sorted(probe.rglob('*')):
+              assert not path.is_symlink(), 'No followed diagnostic symlink'
+              if path.is_file():
+                  assert path.stat().st_size<=128*1024**2
+                  h=hashlib.sha256()
+                  with path.open('rb') as stream:
+                      for chunk in iter(lambda:stream.read(1024**2),b''):h.update(chunk)
+                  files.append({'path':path.relative_to(probe).as_posix(),'bytes':path.stat().st_size,'sha256':h.hexdigest()})
+          assert len(files)<=50000 and sum(f['bytes'] for f in files)<=2*1024**3
+          manifest={'status':'DIAGNOSTIC_ONLY_NOT_PACKAGE_ACCEPTANCE','repository':os.environ['GITHUB_REPOSITORY'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':1,'head_sha':os.environ['GITHUB_SHA'],'candidate_sha256':json.loads(pathlib.Path('candidate/manifest.json').read_text())['tarball_sha256'],'execution_priority':'low','probe_outcome':os.environ['PROBE_OUTCOME'],'provision_outcome':os.environ['PROVISION_OUTCOME'],'files':files}
+          (probe/'probe-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          PY
+      - name: Upload original diagnostic data even for expected baseline failure
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: arm64-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.LISAR_VALIDATION_ROOT }}/probe/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1

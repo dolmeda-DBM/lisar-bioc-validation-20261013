@@ -21,6 +21,8 @@ import time
 REPOSITORY = "dolmeda-DBM/lisar-bioc-validation-20261013"
 STAGES = ("ordinary-default", "longtests-default",
           "ordinary-backend-only", "longtests-backend-only")
+LONGTEST_TSV_HEADER = ("file", "context", "test", "nb", "failed", "skipped",
+                       "error", "warning", "user", "system", "real", "passed")
 
 
 def stamp():
@@ -147,29 +149,66 @@ def native_summary(checkdir):
                 "warnings": None, "notes": None}
     last = summaries[-1]
     counts = {"errors": 0, "warnings": 0, "notes": 0}
-    keys = {"ERROR": "errors", "WARNING": "warnings", "NOTE": "notes"}
-    for value, kind in re.findall(r"(\d+)\s+(ERROR|WARNING|NOTE)", last):
-        counts[keys[kind]] = int(value)
-    if last.strip() != "Status: OK" and not re.search(r"\d+\s+(ERROR|WARNING|NOTE)", last):
-        return {"status": "UNRECOGNIZED_TERMINAL_SUMMARY_COUNTS_UNKNOWN",
-                "native_summary": last, "errors": None, "warnings": None, "notes": None}
+    if last.strip() != "Status: OK":
+        seen = set()
+        for token in last.removeprefix("Status:").strip().split(","):
+            match = re.fullmatch(r"\s*([0-9]+)\s+(ERROR|WARNING|NOTE)s?\s*", token)
+            if match is None or match[2] in seen:
+                return {"status": "UNRECOGNIZED_TERMINAL_SUMMARY_COUNTS_UNKNOWN",
+                        "native_summary": last, "errors": None, "warnings": None, "notes": None}
+            seen.add(match[2])
+            counts[{"ERROR": "errors", "WARNING": "warnings", "NOTE": "notes"}[match[2]]] = int(match[1])
     return {"status": "NATIVE_TERMINAL_SUMMARY_NOT_GLOBAL_PASS", "native_summary": last, **counts}
 
 
-def test_evidence(stagepath, checkdir):
+def integral_tsv_count(value, label):
+    # testthat3.3.2 emits integer expectation counts. Never round floats or
+    # reinterpret NA, booleans, partial numbers, or unknown values as zero.
+    if not isinstance(value, str) or re.fullmatch(r"[0-9]+(?:\.0+)?", value) is None:
+        raise ValueError(f"Unknown/truncated/nonintegral TSV count {label}: {value!r}")
+    return int(value.split(".")[0])
+
+
+def tsv_event_flag(value, label):
+    # Only skipped/error are logical event flags in this pinned native schema.
+    # warning is an expectation count, not a TRUE/FALSE flag.
+    if value not in ("TRUE", "FALSE"):
+        raise ValueError(f"Unknown/truncated TSV event flag {label}: {value!r}")
+    return int(value == "TRUE")
+
+
+def test_evidence(stagepath, checkdir, manifest):
     files = sorted((stagepath / "test-evidence").glob("test-*.R.tsv"))
-    if files:
+    if stagepath.name.startswith("longtests"):
+        expected = sorted(Path(x["path"]).name + ".tsv" for x in manifest["archive_files"]
+                          if x["path"].startswith("longtests/testthat/test-") and x["path"].endswith(".R"))
+        if not expected or len(expected) != len(set(expected)) or [p.name for p in files] != expected:
+            raise ValueError(f"Incomplete/unexpected original longtest TSV inventory: expected {expected}, observed {[p.name for p in files]}")
         totals = {key: 0 for key in ("passed", "failed", "errors", "warnings", "skipped")}
         for path in files:
-            with path.open(newline="") as f:
-                for row in csv.DictReader(f, delimiter="\t"):
-                    totals["passed"] += int(float(row["passed"]))
-                    totals["failed"] += int(float(row["failed"]))
-                    totals["warnings"] += int(float(row["warning"]))
-                    totals["skipped"] += int(float(row["skipped"]))
-                    totals["errors"] += int(row["error"].upper() == "TRUE")
+            with path.open(newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f, delimiter="\t", strict=True)
+                if tuple(reader.fieldnames or ()) != LONGTEST_TSV_HEADER:
+                    raise ValueError(f"Unknown/incomplete native testthat3.3.2 TSV header: {path.name}")
+                rows = 0
+                for row in reader:
+                    rows += 1
+                    label = f"{path.name}/row{reader.line_num}"
+                    if None in row or any(value is None for value in row.values()):
+                        raise ValueError(f"Unknown/truncated/extra TSV row: {label}")
+                    if row["file"] != path.name.removesuffix(".tsv"):
+                        raise ValueError(f"Native TSV file identity mismatch: {label}")
+                    integral_tsv_count(row["nb"], label + "/nb")
+                    for field, key in (("passed", "passed"), ("failed", "failed"), ("warning", "warnings")):
+                        totals[key] += integral_tsv_count(row[field], label + "/" + field)
+                    for field, key in (("skipped", "skipped"), ("error", "errors")):
+                        totals[key] += tsv_event_flag(row[field], label + "/" + field)
+                if not rows:
+                    raise ValueError(f"Empty original longtest TSV: {path.name}")
         return {"status": "NATIVE_LONGTEST_TSV_TOTALS_NOT_GLOBAL_PASS",
                 "files": [str(x.relative_to(stagepath)) for x in files], **totals}
+    if files:
+        raise ValueError("Unexpected TSV cannot substitute for native ordinary Rout")
     lines = []
     for path in sorted((checkdir / "tests").glob("*.Rout*")):
         lines.extend(path.read_text(errors="replace").splitlines())
@@ -311,17 +350,43 @@ def check(stage):
         except OSError as exc:
             launch_error = str(exc)
     elapsed = time.monotonic() - start
+    ended_at = stamp()
+    # Preserve the observed native exit before any summary/source decoding.
+    # A collector fault must neither erase R's exit nor fabricate a PASS receipt.
+    record(stagepath / "native-exit.json", {
+        "status": "OBSERVED_NATIVE_EXIT_NOT_GLOBAL_PASS", "stage": stage,
+        "R_returncode": returncode, "ended_at": ended_at, "elapsed_seconds": elapsed,
+        "launch_error": launch_error, "capture_failure": capture_failure,
+        "stdout": "stdout.log", "stderr": "stderr.log"
+    })
     checkdir = stagepath / "lisaR.Rcheck"
-    pins = source_pins(checkdir, manifest, longtests)
+    processing_failures = []
+    pins = []
+    try:
+        pins = source_pins(checkdir, manifest, longtests)
+    except Exception as exc:
+        processing_failures.append({"component": "test_source_pins", "error_type": type(exc).__name__, "error": str(exc)})
+    summaries = {}
+    for component, decode, keys in (
+        ("native_check_summary", lambda: native_summary(checkdir), ("errors", "warnings", "notes")),
+        ("native_test_summary", lambda: test_evidence(stagepath, checkdir, manifest),
+         ("passed", "failed", "errors", "warnings", "skipped") if longtests else ("passed", "failed", "warnings", "skipped"))):
+        summaries[component] = {"status": "NATIVE_SUMMARY_DECODING_FAILED_COUNTS_UNKNOWN_NOT_ZERO",
+                                **{key: None for key in keys}}
+        try:
+            summaries[component] = decode()
+            if any(type(summaries[component].get(key)) is not int or summaries[component][key] < 0 for key in keys):
+                raise ValueError("Native summary has unknown/invalid counts")
+        except Exception as exc:
+            processing_failures.append({"component": component, "error_type": type(exc).__name__, "error": str(exc)})
     integrity_failures = [x for x in pins if x["matched"] is False]
-    wrapper_code = returncode if returncode != 0 else (1 if launch_error or capture_failure or integrity_failures else 0)
+    wrapper_code = returncode if returncode != 0 else (1 if launch_error or capture_failure or integrity_failures or processing_failures else 0)
     result = {
         "status": "NATIVE_CHECK_COMPLETED_NOT_GLOBAL_PASS" if returncode == 0 else "NATIVE_CHECK_FAILED",
         "stage": stage, "R_returncode": returncode, "wrapper_returncode": wrapper_code,
-        "ended_at": stamp(), "elapsed_seconds": elapsed, "launch_error": launch_error,
+        "ended_at": ended_at, "elapsed_seconds": elapsed, "launch_error": launch_error,
         "capture_failure": capture_failure, "candidate_sha256": sha(tarpath),
-        "native_check_summary": native_summary(checkdir),
-        "native_test_summary": test_evidence(stagepath, checkdir),
+        **summaries, "evidence_processing_failures": processing_failures,
         "test_source_pins": pins, "integrity_failures": integrity_failures,
         "backend_only": backend_only, "full_check_pass_claimed": False,
         "scientific_oracles": manifest["scientific_oracles"]
