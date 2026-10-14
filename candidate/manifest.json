@@ -1,6 +1,6 @@
 {
   "tarball": "candidate/lisaR_0.99.0.tar.gz",
-  "tarball_sha256": "2759ef3ec395b6b55c0dfe16633bd304ce8b2e36b175cd3c7bbb8d73acce6815",
+  "tarball_sha256": "c139c4e96c0fff9aa481ffd1ba63a129202c7b5b924e5c973f777cbc8da4ca99",
   "R_version": "4.6.1",
   "Bioconductor_version": "3.24",
   "testthat_version": "3.3.2",
@@ -1197,13 +1197,13 @@
     },
     {
       "path": "longtests/ownership.tsv",
-      "bytes": 1066,
-      "sha256": "c1e235ef41f27be3af8f093b5ace86dc04233bd0cb325b90d1d155933699a091"
+      "bytes": 1250,
+      "sha256": "8e734697f1cbe6e10c0a0ba01924e5925bcd66c5f34d2422f20ae4342fde2e5b"
     },
     {
       "path": "longtests/testthat.R",
-      "bytes": 3781,
-      "sha256": "7d2603aeeeb6eee3b28c1131274734c6ea5bed6bda9aaa62d2f0502307d7303b"
+      "bytes": 3843,
+      "sha256": "d3a2f5456b53314cdfe36e4e554229afdeb29b37176bb8c314990f8decd75c72"
     },
     {
       "path": "longtests/testthat/fixtures/installation-smoke/category-inference-original.tsv",
@@ -1221,9 +1221,34 @@
       "sha256": "4abaead1d622f562bbc2aa8ec85c02a470bcdcfc6cfcbd2fb1c8ef849993ef61"
     },
     {
+      "path": "longtests/testthat/fixtures/portable-installation-smoke-baselines/PROVENANCE.json",
+      "bytes": 1239,
+      "sha256": "d2165023720f4424bd82c2c7c40ed4e1cf15e922e13f0d3ee9017f3d558a025d"
+    },
+    {
+      "path": "longtests/testthat/fixtures/portable-installation-smoke-baselines/category-results.tsv",
+      "bytes": 9310,
+      "sha256": "c757c32487d23a2af8559fb1200dac93db93c31265a0a6d2761fb75e4b724a77"
+    },
+    {
+      "path": "longtests/testthat/fixtures/portable-installation-smoke-baselines/hypothesis-family.tsv",
+      "bytes": 5591,
+      "sha256": "e436a8044ad920469264cd23f56a78e2dce757a00396f3c69d463f177f432d04"
+    },
+    {
+      "path": "longtests/testthat/fixtures/portable-installation-smoke-baselines/raw-results.tsv",
+      "bytes": 14516,
+      "sha256": "2a67b5b787ba776c8b70b9352d95025d3f9a0deb94369fec18a213021f209e77"
+    },
+    {
       "path": "longtests/testthat/helper-explore.R",
       "bytes": 9997,
       "sha256": "d1fed4cc0bc7f39bafc4a326082f6f1137ba7c3cd047ee2dd2be93fded828b2c"
+    },
+    {
+      "path": "longtests/testthat/helper-portable-inference.R",
+      "bytes": 5532,
+      "sha256": "9b2b4f8683db98e720e18b3c98db10080b4749cdcd2deac5fd60a83471afa605"
     },
     {
       "path": "longtests/testthat/helper-run-contract.R",
@@ -1271,9 +1296,14 @@
       "sha256": "6d1940602ff1ec49f8232a65d65389e1019ab1cfd572c3459fe657fa0831bc88"
     },
     {
+      "path": "longtests/testthat/test-portable-inference.R",
+      "bytes": 3661,
+      "sha256": "5a0e259e493a6b3cb9afd1eaac6d7c055faab7b883fbdeee28e7b2c4a1ee5a72"
+    },
+    {
       "path": "longtests/testthat/test-quick-start.R",
-      "bytes": 26019,
-      "sha256": "4e7b539a765bfd61ecd04294326d95d69d76e188af6e8eea52ce5301ca5994cf"
+      "bytes": 25941,
+      "sha256": "b75906a220b9de4f3fb9c0a606c44c13913ee27f8c0a3c04a2c64dba646583a1"
     },
     {
       "path": "longtests/testthat/test-report-architecture.R",
@@ -1701,6 +1731,11 @@
       "sha256": "b8da7dd1b87adb6814a63f4194e09f44497549b3b021f35953e0eade5957f44c"
     },
     {
+      "path": "tests/testthat/helper-portable-inference.R",
+      "bytes": 5532,
+      "sha256": "9b2b4f8683db98e720e18b3c98db10080b4749cdcd2deac5fd60a83471afa605"
+    },
+    {
       "path": "tests/testthat/helper-run-contract.R",
       "bytes": 1037,
       "sha256": "07ccee852428882339fd5204c1e1300443429b3d944b309e72a2fced9bf6a318"
@@ -2089,6 +2124,11 @@
       "path": "tests/testthat/test-plot-context.R",
       "bytes": 7871,
       "sha256": "27eaacbdfbafcf72d7381dfa31e39283d0c346293aab888d9ba2e2935549444a"
+    },
+    {
+      "path": "tests/testthat/test-portable-inference.R",
+      "bytes": 3661,
+      "sha256": "5a0e259e493a6b3cb9afd1eaac6d7c055faab7b883fbdeee28e7b2c4a1ee5a72"
     },
     {
       "path": "tests/testthat/test-portable-path-budget.R",
@@ -2495,5 +2535,13 @@
       "bytes": 26881,
       "sha256": "64ecdedca23174f94033b86f4821830012c91aa2ad6e71ad58670cdf90068cc5"
     }
-  ]
+  ],
+  "portable_test_contract": {
+    "rtol": 1e-12,
+    "atol": 0,
+    "p_only": true,
+    "baseline_candidate_sha256": "2759ef3ec395b6b55c0dfe16633bd304ce8b2e36b175cd3c7bbb8d73acce6815",
+    "production_unchanged": true,
+    "additional_fixture_provenance": "longtests/testthat/fixtures/portable-installation-smoke-baselines/PROVENANCE.json"
+  }
 }

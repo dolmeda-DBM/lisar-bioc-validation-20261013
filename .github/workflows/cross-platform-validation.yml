@@ -1,0 +1,120 @@
+name: Experimental lisaR Linux and Windows regression
+on:
+  workflow_dispatch:
+    inputs:
+      expected_head_sha:
+        description: Same exact final upload commit already verified on macOS
+        required: true
+        type: string
+      verified_macos_run_id:
+        description: Reviewed complete native Mac run on that same commit
+        required: true
+        type: string
+      macos_review_sha256:
+        description: Hash of the local owner native Mac review (not a badge)
+        required: true
+        type: string
+      expected_candidate_sha256:
+        description: Exact same reviewed candidate tarball
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: lisar-cross-platform-${{ inputs.expected_head_sha }}
+  cancel-in-progress: false
+jobs:
+  native:
+    name: Native ${{ matrix.platform }} full checks
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux-x86_64
+            machine: x86_64
+            python: python3
+          - runner: windows-2025
+            platform: windows-x86_64
+            machine: AMD64
+            python: python
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    env:
+      execution_priority: low
+      LISAR_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+      LISAR_EXPECTED_ARCH: ${{ matrix.machine }}
+      LISAR_RUNTIME_PLATFORM: ${{ matrix.platform }}
+      EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
+      VERIFIED_MACOS_RUN_ID: ${{ inputs.verified_macos_run_id }}
+      MACOS_REVIEW_SHA256: ${{ inputs.macos_review_sha256 }}
+      EXPECTED_CANDIDATE_SHA256: ${{ inputs.expected_candidate_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+      NCPUS: '2'
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MAKEFLAGS: '-j1'
+      R_KEEP_PKG_SOURCE: 'yes'
+    steps:
+      - name: Exact same reviewed checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.expected_head_sha }}
+      - name: Verify native public runner, exact oracles and previous Mac identity
+        id: initialize
+        run: ${{ matrix.python }} ci/cross_runner.py initialize
+      - name: Pinned native project R and Windows build tools
+        uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.6.1'
+          use-public-rspm: false
+          windows-path-include-rtools: true
+      - name: Linux build and system dependencies
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential gfortran pkg-config libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev libtiff-dev libjpeg-dev
+      - name: Pandoc for complete vignettes
+        uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - name: TinyTeX for native PDF manual
+        uses: r-lib/actions/setup-tinytex@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+      - name: Isolated full dependency library including Shiny backend
+        id: provision
+        run: ${{ matrix.python }} ci/cross_runner.py provision
+      - name: Native parse and adversarial portability contract
+        id: portable
+        run: ${{ matrix.python }} ci/cross_runner.py portable
+      - name: Native full ordinary check on exact tarball
+        id: ordinary
+        if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
+        run: ${{ matrix.python }} ci/cross_runner.py check ordinary-default
+      - name: Native full BBS longtests on same tarball
+        id: longtests
+        if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
+        run: ${{ matrix.python }} ci/cross_runner.py check longtests-default
+      - name: Preserve stage outcomes
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        env:
+          ORDINARY_OUTCOME: ${{ steps.ordinary.outcome }}
+          LONGTESTS_OUTCOME: ${{ steps.longtests.outcome }}
+          PORTABLE_OUTCOME: ${{ steps.portable.outcome }}
+          PROVISION_OUTCOME: ${{ steps.provision.outcome }}
+        run: ${{ matrix.python }} ci/cross_runner.py outcomes
+      - name: Preserve original diagnostics including native exits
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        run: ${{ matrix.python }} ci/cross_runner.py collect
+      - name: Upload bounded native evidence
+        if: ${{ always() && steps.initialize.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cross-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.LISAR_VALIDATION_ROOT }}/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1

@@ -42,3 +42,16 @@ Download the logs and artifacts before removing the temporary repository.
 Copies of a public repository may persist after deletion.
 
 The package and these validation scripts are licensed GPL-3.0-or-later.
+
+## Portable test-only acceptance
+
+This candidate changes tests only: production statistics and the original
+fixtures are byte-identical to the baseline. P-value comparisons use
+relative tolerance 1e-12 with zero absolute tolerance; structure,
+significance, support and run integrity remain exact. No produced values
+or identifiers are rounded or replaced. Additional reference tables
+are original R1 Intel outputs with pinned provenance, not new expected outputs.
+
+Linux/Windows regression is manual-only and runs the same candidate/head
+after owner review of both macOS architectures. Dependencies are ordinary
+upstream CRAN/Bioconductor; no numerical or namespace experimental patches.

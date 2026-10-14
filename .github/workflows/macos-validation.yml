@@ -60,22 +60,27 @@ jobs:
         id: provision
         shell: bash
         run: Rscript --vanilla ci/provision.R > "$LISAR_VALIDATION_ROOT/provision.log" 2>&1
+      - name: Native parse and adversarial portability contract
+        id: portable
+        shell: bash
+        run: Rscript --vanilla ci/portable-preflight.R > "$LISAR_VALIDATION_ROOT/portable-preflight.log" 2>&1
       - name: Native ordinary check on exact input
         id: ordinary
-        if: ${{ always() && steps.provision.outcome == 'success' }}
+        if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: python3 ci/runner.py check ordinary-default
       - name: Native BBS longtests on same exact input
         id: longtests
-        if: ${{ always() && steps.provision.outcome == 'success' }}
+        if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: python3 ci/runner.py check longtests-default
       - name: Preserve stage outcomes
         if: ${{ always() && steps.initialize.outcome == 'success' }}
         env:
           ORDINARY_OUTCOME: ${{ steps.ordinary.outcome }}
           LONGTESTS_OUTCOME: ${{ steps.longtests.outcome }}
+          PORTABLE_OUTCOME: ${{ steps.portable.outcome }}
           PROVISION_OUTCOME: ${{ steps.provision.outcome }}
         run: |
-          python3 -c 'import json,os,pathlib; pathlib.Path(os.environ["LISAR_VALIDATION_ROOT"],"stage-outcomes.json").write_text(json.dumps({k:os.environ[k] for k in ("PROVISION_OUTCOME","ORDINARY_OUTCOME","LONGTESTS_OUTCOME")},indent=2)+"\n")'
+          python3 -c 'import json,os,pathlib; pathlib.Path(os.environ["LISAR_VALIDATION_ROOT"],"stage-outcomes.json").write_text(json.dumps({k:os.environ[k] for k in ("PROVISION_OUTCOME","PORTABLE_OUTCOME","ORDINARY_OUTCOME","LONGTESTS_OUTCOME")},indent=2)+"\n")'
       - name: Preserve original diagnostics and manifests
         if: ${{ always() && steps.initialize.outcome == 'success' }}
         run: python3 ci/runner.py collect
