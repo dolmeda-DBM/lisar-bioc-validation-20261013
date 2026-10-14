@@ -1,0 +1,46 @@
+{
+  "status": "DIAGNOSTIC_ONLY_NOT_PACKAGE_ACCEPTANCE",
+  "execution_priority": "low",
+  "BH_version": "1.90.0-1",
+  "Boost_version": 109000,
+  "critical_BH_header_sha256": {
+    "boost/version.hpp": "1a3a432bf24fbd21b3c9c90b3f5dce9456f2334f1d2b79b1e3318c780d8b1935",
+    "boost/math/special_functions/digamma.hpp": "9c51bf9e313062f50cb9b21e2a29e9c9210f27eb9689003b38a40e2552f9cb0f",
+    "boost/math/special_functions/trigamma.hpp": "b1ae9e027ad15523504cc669a2f6de18edf0920cb3e3be9276923ed4c64d1ad4",
+    "boost/math/policies/policy.hpp": "0f0006710174f5bd9bacb6bdd860cf512282124f19c621877741822c9c135375",
+    "boost/math/tools/promotion.hpp": "6c941b95fbadb6a635aaa2a87c51d0657900278f1f79222f3f61d23031bbafc6",
+    "boost/math/tools/config.hpp": "937bfeba8cc4655b6e77b458d8d7fd0efca1a5dc51463f02a60406ffc1d6639d",
+    "boost/multiprecision/cpp_bin_float.hpp": "8b0eb02bec4bc4c6648cbec59a06d53c2588c9b1aacb5aecbce93d6f9f417ff7",
+    "boost/math/tools/big_constant.hpp": "cc1005b66eaf094d251b2c7185e7aa118d546c7ccb1cb61416725ab5d996de84"
+  },
+  "fgsea": {
+    "version": "1.39.2",
+    "source_url": "https://bioconductor.org/packages/3.24/bioc/src/contrib/fgsea_1.39.2.tar.gz",
+    "source_tar_sha256": "caffc4412072f1d816c48bd26c6546e38d22d3a14f230dfc88f5e10220c63c87",
+    "git_last_commit": "31cb676",
+    "primitive_source_sha256": {
+      "util.cpp": "46d3a423ed2bd1ac8258081893e94e87d73554c3fdbafbc0fc1cf6c1c8500737",
+      "util.h": "2e99d5824b6e790256c9fea3b5f91086d28e70a0b3a77ec4ca80fe734070cad7"
+    }
+  },
+  "SummarizedExperiment": {
+    "version": "1.43.0",
+    "source_url": "https://bioconductor.org/packages/3.24/bioc/src/contrib/SummarizedExperiment_1.43.0.tar.gz",
+    "source_tar_sha256": "c9895ab3edc4e20e81434b664db562114e891a3a5236f24fef3c38b778cd1544",
+    "git_last_commit": "ffe9db3",
+    "original_NAMESPACE_sha256": "c3b7b22f11e4c2210c4d53b7d8c1d1c135c8b2d48082ac8cf6ebe7534dc8be57",
+    "derived_NAMESPACE_sha256": "67fa14850d505e0eccd114b01fe89c406884a1cde90156016f3b4b331c84df4f",
+    "source_tar_bytes": 690901
+  },
+  "primitive_domain": {
+    "n_min": 1,
+    "n_max": 102,
+    "beta_a_min": 1,
+    "beta_a_max": 102,
+    "beta_b_min": 0,
+    "beta_b_max": 101,
+    "sampleSize": 101
+  },
+  "R_parser_cpp_compile_and_runtime": "native ephemeral runners only; no local execution",
+  "prototype": "Exactly one ARM original48-null smoke; betaMeanLog-only software64 hypothesis plus source namespace remedy; not adoption"
+}
