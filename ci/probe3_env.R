@@ -16,7 +16,7 @@ dir.create(lib)
 utils::install.packages("BH", lib = lib, repos = "https://cloud.r-project.org", dependencies = FALSE)
 .libPaths(c(lib, .libPaths()))
 description <- utils::packageDescription("BH")
-capture.output(description, file = file.path(output, "BH-description.txt"))
+capture.output(description, file = file.path(output, "BH-description-print.txt"))
 stopifnot(identical(description$Version, "1.90.0-1"),
   utils::packageVersion("BH") == package_version("1.90.0-1"))
 include <- normalizePath(system.file("include", package = "BH"), mustWork = TRUE)
