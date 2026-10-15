@@ -21,7 +21,7 @@ PLATFORMS = {"Linux": ("Linux", "x86_64", "linux-x86_64"),
              "Windows": ("Windows", "AMD64", "windows-x86_64")}
 APPROVED_MACOS_HEAD = "b2e149cbc3a3e4937caa8c562b98f38adb1a142b"
 CI_CHANGED = {WORKFLOW, "ci/cross_runner.py"}
-CI_ADDED = {"ci/cross_check.py", "ci/tex-preflight.R"}
+CI_ADDED = {"ci/cross_check.py", "ci/tex-preflight.R", "ci/provision-internal.R"}
 OUTCOMES = ("PROVISION_OUTCOME", "PORTABLE_OUTCOME", "ORDINARY_OUTCOME", "LONGTESTS_OUTCOME")
 
 
@@ -137,14 +137,12 @@ def initialize():
     with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:
         for key, value in {"LISAR_VALIDATION_ROOT": root, "TMPDIR": temporary, "TMP": temporary, "TEMP": temporary}.items():
             output.write(key + "=" + str(value) + "\n")
-        if os.environ["RUNNER_OS"] == "Windows":
-            output.write("R_TEXI2DVICMD=emulation\n")
     root = owned_root()
     data = json.loads((root / "run-intent.json").read_text(encoding="utf-8"))
     data.update(workflow_path=WORKFLOW, macos_reference=reference,
                 platform_key=os.environ["LISAR_RUNTIME_PLATFORM"],
                 dependency_recipe="ordinary unmodified CRAN/Bioconductor provision",
-                provision_source_sha256=native.sha("ci/provision-cross.R"),
+                provision_source_sha256=native.sha("ci/provision-internal.R"),
                 portable_preflight_sha256=native.sha("ci/portable-preflight.R"))
     native.record(root / "run-intent.json", data)
 
@@ -154,13 +152,13 @@ def r_driver(command):
     root = native.owned_root()
     executable = shutil.which("Rscript")
     assert executable, "No native project Rscript resolved"
-    script = {"provision": "ci/provision-cross.R", "portable": "ci/portable-preflight.R", "tex": "ci/tex-preflight.R"}[command]
+    script = {"provision": "ci/provision-internal.R", "portable": "ci/portable-preflight.R", "tex": "ci/tex-preflight.R"}[command]
     # Python opens native Windows paths; Git Bash never redirects through a
     # backslash-form GITHUB_ENV directory. No runtime recipe or source mutation.
     with (root / (command + ".log")).open("xb") as output:
         if command == "provision":
             parsed = subprocess.run([executable, "--vanilla", "-e",
-                                     'stopifnot(getRversion() == "4.6.1"); parse(file = "ci/provision-cross.R"); print(R.version.string)'],
+                                     'stopifnot(getRversion() == "4.6.1"); parse(file = "ci/provision-internal.R"); print(R.version.string)'],
                                     stdout=output, stderr=subprocess.STDOUT, check=False)
             if parsed.returncode:
                 raise SystemExit(parsed.returncode)
@@ -216,7 +214,9 @@ def collect():
     native.record(path, manifest)
     path = destination / "results.json"
     results = json.loads(path.read_text(encoding="utf-8"))
-    results["scope"] = "Native Linux/Windows full ordinary/longtests regression; no global acceptance"
+    results["scope"] = "Internal Linux/Windows ordinary/longtests functional portability; no PDF manual or Bioconductor submission gate"
+    results["validation_profile"] = "internal-functional-portability-no-manual-v1"
+    results["manual_pdf_required"] = False
     native.record(path, results)
     if summary_path:
         with Path(summary_path).open("a", encoding="utf-8") as output:

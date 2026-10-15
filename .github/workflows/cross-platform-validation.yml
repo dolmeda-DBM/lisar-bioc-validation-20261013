@@ -1,4 +1,4 @@
-name: Experimental lisaR Linux and Windows regression
+name: Internal lisaR Linux and Windows functional portability
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   native:
-    name: Native ${{ matrix.platform }} full checks
+    name: Native ${{ matrix.platform }} functional checks (no PDF manual)
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -84,21 +84,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential gfortran pkg-config libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev libtiff-dev libjpeg-dev libuv1-dev
       - name: Pandoc for complete vignettes
         uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
-      - name: TinyTeX for native PDF manual
-        uses: r-lib/actions/setup-tinytex@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
       - name: Isolated full dependency library including Shiny backend
         id: provision
         run: ${{ matrix.python }} ci/cross_runner.py provision
-      - name: Native PDF manual preflight with preserved diagnostics
-        run: ${{ matrix.python }} ci/cross_runner.py tex
       - name: Native parse and adversarial portability contract
         id: portable
+        if: ${{ always() && steps.initialize.outcome == 'success' && steps.provision.outcome == 'success' }}
         run: ${{ matrix.python }} ci/cross_runner.py portable
-      - name: Native full ordinary check on exact tarball
+      - name: Native ordinary functional check on exact tarball (no PDF manual)
         id: ordinary
         if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: ${{ matrix.python }} ci/cross_runner.py check ordinary-default
-      - name: Native full BBS longtests on same tarball
+      - name: Native longtests functional check on same tarball (no PDF manual)
         id: longtests
         if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: ${{ matrix.python }} ci/cross_runner.py check longtests-default

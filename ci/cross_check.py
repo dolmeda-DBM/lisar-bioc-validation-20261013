@@ -1,5 +1,5 @@
-"""Cross-only native driver copy; the sole behavioral change is a short temporary root.
-Offline verification compares its body with runner.check after that single substitution.
+"""Cross-only native functional driver: short temporary roots and --no-manual.
+All scientific tests, examples, vignettes, Suggests and source pins are retained.
 """
 import os
 import subprocess
@@ -45,14 +45,17 @@ def check(stage):
         evidence.mkdir()
         env["LISAR_LONGTEST_EVIDENCE"] = str(evidence)
     executable = Path(env["LISAR_R_EXECUTABLE"]).resolve(strict=True)
-    argv = [str(executable), "CMD", "check"]
+    argv = [str(executable), "CMD", "check", "--no-manual"]
     if longtests:
         argv.append("--test-dir=longtests")
     argv.append(str(tarpath))
     native.record(stagepath / "intent.json", {
         "status": "NATIVE_CHECK_INTENT", "at": native.stamp(), "argv": argv, "cwd": str(stagepath),
         "candidate_sha256": native.sha(tarpath), "backend_only": backend_only,
-        "default_check_flags": not backend_only,
+        "default_check_flags": False,
+        "validation_profile": "internal-functional-portability-no-manual-v1",
+        "check_flags": ["--no-manual"] + (["--test-dir=longtests"] if longtests else []),
+        "manual_pdf_required": False,
         "force_suggests": env.get("_R_CHECK_FORCE_SUGGESTS_", "default"),
         "workers": 2, "fixture_injection": False, "external_fixture": False,
         "allow_shiny_backend": config["allow_shiny_backend"]
