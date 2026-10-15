@@ -11,12 +11,17 @@ import shutil
 import subprocess
 import sys
 import urllib.request
+import hashlib
+import cross_check
 from pathlib import Path
 import runner as native
 
 WORKFLOW = ".github/workflows/cross-platform-validation.yml"
 PLATFORMS = {"Linux": ("Linux", "x86_64", "linux-x86_64"),
              "Windows": ("Windows", "AMD64", "windows-x86_64")}
+APPROVED_MACOS_HEAD = "b2e149cbc3a3e4937caa8c562b98f38adb1a142b"
+CI_CHANGED = {WORKFLOW, "ci/cross_runner.py"}
+CI_ADDED = {"ci/cross_check.py", "ci/tex-preflight.R"}
 OUTCOMES = ("PROVISION_OUTCOME", "PORTABLE_OUTCOME", "ORDINARY_OUTCOME", "LONGTESTS_OUTCOME")
 
 
@@ -53,23 +58,88 @@ def macos_reference():
         run = json.load(response)
     assert run.get("id") == int(run_id) and run.get("run_attempt") == 1
     assert run.get("repository", {}).get("full_name") == native.REPOSITORY
-    assert run.get("head_sha") == os.environ["EXPECTED_HEAD_SHA"]
+    assert run.get("head_sha") == APPROVED_MACOS_HEAD
+    proof = unchanged_macos_tree()
     assert run.get("event") == "workflow_dispatch" and run.get("path") == ".github/workflows/macos-validation.yml"
     assert run.get("status") == "completed" and run.get("conclusion") == "success"
-    return {"run_id": int(run_id), "parent_review_sha256": review}
+    return {"run_id": int(run_id), "parent_review_sha256": review,
+            "head_sha": APPROVED_MACOS_HEAD, "source_tree_proof": proof}
+
+
+def unchanged_macos_tree():
+    """Mac passed an older commit; prove all non-cross-CI blobs are identical."""
+    request = urllib.request.Request(
+        "https://api.github.com/repos/" + native.REPOSITORY + "/git/trees/" + APPROVED_MACOS_HEAD + "?recursive=1",
+        headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                 "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        tree = json.load(response)
+    assert tree.get("truncated") is False
+    assert all(x["type"] in ("tree", "blob") for x in tree["tree"])
+    baseline = {x["path"]: (x["mode"], x["sha"]) for x in tree["tree"] if x["type"] == "blob"}
+    tracked = subprocess.check_output(["git", "ls-files", "-s", "-z"]).decode().split("\0")
+    current = {}
+    for line in filter(None, tracked):
+        prefix, name = line.split("\t", 1)
+        mode, blob, index_stage = prefix.split()
+        assert index_stage == "0" and mode in ("100644", "100755")
+        path = Path(name)
+        assert path.is_file() and not path.is_symlink()
+        data = path.read_bytes()
+        actual = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+        assert actual == blob, "Dirty checkout: " + name
+        current[name] = (mode, blob)
+    assert set(current) == set(baseline) | CI_ADDED, "Unexpected new or removed files"
+    assert CI_CHANGED <= set(baseline)
+    protected = set(baseline) - CI_CHANGED
+    assert all(current[name] == baseline[name] for name in protected), "Non-cross-CI source drift"
+    return {"status": "EXACT_PROTECTED_GIT_BLOBS_MATCH_MACOS", "macos_head_sha": APPROVED_MACOS_HEAD,
+            "protected_blobs": {name: baseline[name][1] for name in sorted(protected)},
+            "allowed_changed_paths": sorted(CI_CHANGED), "allowed_added_paths": sorted(CI_ADDED)}
+
+
+def short_root():
+    # New standard hosted VM only. Never reclaim, delete or reuse this path.
+    return Path(Path(os.environ["RUNNER_TEMP"]).anchor) / "l" if os.environ["RUNNER_OS"] == "Windows" else Path("/tmp/l")
+
+
+def owned_root():
+    declared = Path(os.environ["LISAR_VALIDATION_ROOT"])
+    root = short_root()
+    assert declared == root and root.is_dir() and not root.is_symlink()
+    assert root.resolve(strict=True) == root
+    receipt = json.loads((root / "run-intent.json").read_text())
+    assert receipt["repository"] == native.REPOSITORY
+    assert receipt["run_id"] == os.environ["GITHUB_RUN_ID"]
+    assert receipt["head_sha"] == os.environ["EXPECTED_HEAD_SHA"]
+    assert receipt["candidate_sha256"] == os.environ["EXPECTED_CANDIDATE_SHA256"]
+    return root
 
 
 def initialize():
     guard()
     reference = macos_reference()
+    destination = short_root()
+    assert not destination.exists() and not destination.is_symlink(), "Owned short root already exists; do not overwrite"
     native.initialize()
     # initialize writes GITHUB_ENV for the NEXT step, not os.environ in this
     # process. Set only this process's owned path before adding provenance.
     root = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True) / (
         "lisar-validation-" + os.environ["GITHUB_RUN_ID"] + "-" +
         os.environ["GITHUB_RUN_ATTEMPT"] + "-" + os.environ["LISAR_EXPECTED_ARCH"])
+    # The Linux runner workspace and /tmp can be on different filesystems.
+    # Copy into an absent owned destination; preserve the original extraction.
+    shutil.copytree(root, destination)
+    root = destination
     os.environ["LISAR_VALIDATION_ROOT"] = str(root)
-    root = native.owned_root()
+    temporary = root / "p"
+    temporary.mkdir()
+    with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:
+        for key, value in {"LISAR_VALIDATION_ROOT": root, "TMPDIR": temporary, "TMP": temporary, "TEMP": temporary}.items():
+            output.write(key + "=" + str(value) + "\n")
+        if os.environ["RUNNER_OS"] == "Windows":
+            output.write("R_TEXI2DVICMD=emulation\n")
+    root = owned_root()
     data = json.loads((root / "run-intent.json").read_text(encoding="utf-8"))
     data.update(workflow_path=WORKFLOW, macos_reference=reference,
                 platform_key=os.environ["LISAR_RUNTIME_PLATFORM"],
@@ -84,7 +154,7 @@ def r_driver(command):
     root = native.owned_root()
     executable = shutil.which("Rscript")
     assert executable, "No native project Rscript resolved"
-    script = "ci/provision-cross.R" if command == "provision" else "ci/portable-preflight.R"
+    script = {"provision": "ci/provision-cross.R", "portable": "ci/portable-preflight.R", "tex": "ci/tex-preflight.R"}[command]
     # Python opens native Windows paths; Git Bash never redirects through a
     # backslash-form GITHUB_ENV directory. No runtime recipe or source mutation.
     with (root / (command + ".log")).open("xb") as output:
@@ -109,7 +179,7 @@ def outcomes():
 def check(stage):
     guard()
     assert stage in ("ordinary-default", "longtests-default")
-    native.check(stage)
+    cross_check.check(stage)
 
 
 def collect():
@@ -123,6 +193,23 @@ def collect():
     destination = native.owned_root() / "evidence"
     path = destination / "evidence-manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
+    diagnostics = native.owned_root() / "tex-diagnostics"
+    if diagnostics.is_dir() and not diagnostics.is_symlink():
+        for source in sorted(diagnostics.rglob("*")):
+            assert not source.is_symlink()
+            if not source.is_file():
+                continue
+            assert source.stat().st_size <= 16 * 1024 ** 2
+            relative = source.relative_to(native.owned_root())
+            target = destination / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            manifest["files"].append({"path": relative.as_posix(), "bytes": source.stat().st_size,
+                                      "sha256": native.sha(source)})
+    pdf = native.owned_root() / "manual-preflight.pdf"
+    if pdf.is_file() and not pdf.is_symlink():
+        shutil.copy2(pdf, destination / pdf.name)
+        manifest["files"].append({"path": pdf.name, "bytes": pdf.stat().st_size, "sha256": native.sha(pdf)})
     manifest.update(schema="lisar-cross-platform-native-evidence-v1", workflow_path=WORKFLOW,
                     platform_key=os.environ["LISAR_RUNTIME_PLATFORM"],
                     macos_reference=json.loads((destination / "run-intent.json").read_text())["macos_reference"])
@@ -144,10 +231,11 @@ def collect():
 # Admission-only adaptation; native algorithms, production R and mathematics
 # are untouched. ci/runner.py remains byte-for-byte the approved Mac driver.
 native.guard = guard
+native.owned_root = owned_root
 if __name__ == "__main__":
     command = sys.argv[1]
     if command == "initialize": initialize()
-    elif command in ("provision", "portable"): r_driver(command)
+    elif command in ("provision", "portable", "tex"): r_driver(command)
     elif command == "outcomes": outcomes()
     elif command == "check": check(sys.argv[2])
     elif command == "collect": collect()

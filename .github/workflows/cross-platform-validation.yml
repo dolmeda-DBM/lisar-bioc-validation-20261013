@@ -3,11 +3,11 @@ on:
   workflow_dispatch:
     inputs:
       expected_head_sha:
-        description: Same exact final upload commit already verified on macOS
+        description: Exact cross-CI commit; candidate and protected Mac blobs must match
         required: true
         type: string
       verified_macos_run_id:
-        description: Reviewed complete native Mac run on that same commit
+        description: Reviewed native Mac run on approved b2e149 commit; exact blob proof required
         required: true
         type: string
       macos_review_sha256:
@@ -61,6 +61,8 @@ jobs:
       MAKEFLAGS: '-j1'
       R_KEEP_PKG_SOURCE: 'yes'
     steps:
+      - name: Preserve committed bytes on native checkout
+        run: git config --global core.autocrlf false
       - name: Exact same reviewed checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -79,7 +81,7 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential gfortran pkg-config libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev libtiff-dev libjpeg-dev
+          sudo apt-get install -y --no-install-recommends build-essential gfortran pkg-config libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev libtiff-dev libjpeg-dev libuv1-dev
       - name: Pandoc for complete vignettes
         uses: r-lib/actions/setup-pandoc@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
       - name: TinyTeX for native PDF manual
@@ -87,6 +89,8 @@ jobs:
       - name: Isolated full dependency library including Shiny backend
         id: provision
         run: ${{ matrix.python }} ci/cross_runner.py provision
+      - name: Native PDF manual preflight with preserved diagnostics
+        run: ${{ matrix.python }} ci/cross_runner.py tex
       - name: Native parse and adversarial portability contract
         id: portable
         run: ${{ matrix.python }} ci/cross_runner.py portable
