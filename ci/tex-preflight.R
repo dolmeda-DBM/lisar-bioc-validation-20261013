@@ -13,7 +13,7 @@ if (.Platform$OS.type == "windows") {
   stopifnot(identical(Sys.getenv("R_TEXI2DVICMD"), "emulation"))
 }
 commands <- Sys.which(c("pdflatex", "makeindex", "texi2dvi", "kpsewhich", "bibtex"))
-stopifnot(nzchar(commands[["pdflatex"]]), nzchar(commands[["makeindex"]]))
+
 pdf <- file.path(root, "manual-preflight.pdf")
 stopifnot(!file.exists(pdf))
 args <- c("CMD", "Rd2pdf", "--no-preview", "--no-clean",
@@ -22,6 +22,9 @@ receipt <- list(status = "PREFLIGHT_INTENT_NOT_PACKAGE_PASS", argv = args,
   R = R.version.string, commands = as.list(commands),
   R_TEXI2DVICMD = Sys.getenv("R_TEXI2DVICMD"),
   temporary = tempdir(), temporary_environment = as.list(Sys.getenv(c("TMPDIR", "TMP", "TEMP"))))
+jsonlite::write_json(receipt, file.path(root, "tex-preflight.json"), auto_unbox = TRUE, pretty = TRUE)
+# Preserve command resolution even when a tool is absent.
+stopifnot(nzchar(commands[["pdflatex"]]), nzchar(commands[["makeindex"]]))
 jsonlite::write_json(receipt, file.path(root, "tex-preflight.json"), auto_unbox = TRUE, pretty = TRUE)
 diagnostics <- file.path(root, "tex-diagnostics")
 stopifnot(!dir.exists(diagnostics))

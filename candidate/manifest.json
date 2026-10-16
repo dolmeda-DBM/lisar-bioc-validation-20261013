@@ -1,6 +1,6 @@
 {
   "tarball": "candidate/lisaR_0.99.0.tar.gz",
-  "tarball_sha256": "c139c4e96c0fff9aa481ffd1ba63a129202c7b5b924e5c973f777cbc8da4ca99",
+  "tarball_sha256": "ab7be44dba275337896e86d360abe7ea24dbd89d3c1cad7d80d4461dcdb682f6",
   "R_version": "4.6.1",
   "Bioconductor_version": "3.24",
   "testthat_version": "3.3.2",
@@ -2162,8 +2162,8 @@
     },
     {
       "path": "tests/testthat/test-public-api.R",
-      "bytes": 10582,
-      "sha256": "8623cecbf03a0fa03764b75e5e5196427631d512ef717044a276a9d6e7a371d4"
+      "bytes": 10577,
+      "sha256": "017c0e40a88f2d6c7da8eb5f404c77bc31476d1d5f9af1f0b7b970c9c59bf919"
     },
     {
       "path": "tests/testthat/test-quick-start.R",
@@ -2543,5 +2543,14 @@
     "baseline_candidate_sha256": "2759ef3ec395b6b55c0dfe16633bd304ce8b2e36b175cd3c7bbb8d73acce6815",
     "production_unchanged": true,
     "additional_fixture_provenance": "longtests/testthat/fixtures/portable-installation-smoke-baselines/PROVENANCE.json"
+  },
+  "windows_fixture_revision": {
+    "baseline_candidate_sha256": "c139c4e96c0fff9aa481ffd1ba63a129202c7b5b924e5c973f777cbc8da4ca99",
+    "changed_paths": [
+      "tests/testthat/test-public-api.R"
+    ],
+    "reason": "Shorter synthetic fixture parent; production 240 UTF-16 guard and all assertions unchanged",
+    "production_unchanged": true,
+    "all_prior_platform_passes_require_rerun": true
   }
 }

@@ -6,11 +6,12 @@ The complete candidate package is in `candidate/lisaR_0.99.0.tar.gz`; its
 SHA-256 and every archive member are recorded in `candidate/manifest.json`.
 No source history, unpublished research data, or credentials are included.
 
-## macOS checks
+## Full Bioconductor validation
 
 The workflow is manual only and accepts an exact commit SHA.
-It uses the **standard public-repository** runners `macos-15-intel` (Intel) and
-`macos-15` (ARM64), one at a time, with R **4.6.1**, Bioconductor **3.24**
+The workflow `bioconductor-validation.yml` uses **standard public-repository**
+runners `macos-15-intel` (Intel), `macos-15` (ARM64), `ubuntu-24.04` and
+`windows-2025`, one at a time, with R **4.6.1**, Bioconductor **3.24**
 and testthat **3.3.2**. There is no private/larger-runner fallback or cache.
 See [GitHub runner documentation](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
@@ -18,11 +19,21 @@ Each architecture runs independent native commands on the exact input tarball:
 
 - Ordinary `R CMD check`, with default check flags.
 - BBS-route `R CMD check --test-dir=longtests`, even if ordinary fails.
+- Reference `R CMD check --no-build-vignettes` in addition to the full check.
+- Clean build and installation, full BiocCheckGitClone on an exact local clone,
+  and BiocCheck on the candidate tarball, with no checks excluded.
+- Actual PDF/manual toolchain preflight, recorded independently of test execution.
+
+Linux repeats ordinary checks and longtests in fresh network namespaces with
+explicit isolation evidence. Other-platform runs do not claim network isolation.
+Linux records elapsed time and native peak resident memory. Old platform PASS
+results are not reused for a changed candidate. This is validation, not submission.
 
 No rebuilt package replaces the input. Warnings, errors, omissions, native
 return codes and incomplete evidence remain visible; a green workflow is not
-a claim of Bioconductor acceptance. BiocCheck and Windows/Linux acceptance are
-separate gates, not results of this workflow.
+a claim of Bioconductor acceptance. Errors block readiness; warnings and notes
+remain visible and require review. Avoidable warnings must be resolved, and any
+remaining warnings justified without claiming they are accepted by Bioconductor.
 
 ### Shiny scope
 
@@ -33,7 +44,7 @@ No Shiny app/UI is launched or deployed by the workflow.
 
 ## Evidence
 
-Public artifacts are retained for **one day**. They contain this candidate's
+Full-validation public artifacts are retained for **seven days**. They contain this candidate's
 synthetic-package diagnostics only: native check logs/Rout files, session and
 dependency versions, archive and test-file hashes, longtests' original TSV/RDS,
 and bounded fallback-fixture snapshots explicitly marked potentially incomplete.
@@ -52,6 +63,7 @@ significance, support and run integrity remain exact. No produced values
 or identifiers are rounded or replaced. Additional reference tables
 are original R1 Intel outputs with pinned provenance, not new expected outputs.
 
-Linux/Windows regression is manual-only and runs the same candidate/head
-after owner review of both macOS architectures. Dependencies are ordinary
-upstream CRAN/Bioconductor; no numerical or namespace experimental patches.
+All four platforms validate the same new exact candidate/head. Dependencies are
+ordinary upstream CRAN/Bioconductor; no numerical or namespace experimental patches.
+The only additional Windows fixture change shortens a synthetic temporary parent
+name; production path limits, assertions and calculations are unchanged.
