@@ -8,19 +8,43 @@ tarball <- file.path(Sys.getenv("GITHUB_WORKSPACE"), manifest$tarball)
 stopifnot(identical(digest::digest(file = tarball, algo = "sha256", serialize = FALSE), manifest$tarball_sha256))
 package <- tarball
 if (mode == "GitClone") {
-  # An actual local Git clone of the exact exported candidate, not the CI wrapper.
-  source <- file.path(root, "input", "lisaR")
+  # Must be a separately reviewed maintained-source tree. Never the built tar export.
+  workspace <- Sys.getenv("GITHUB_WORKSPACE")
+  proof_path <- file.path(workspace, "candidate", "maintained-source-manifest.json")
+  stopifnot(file.exists(proof_path))
+  proof <- jsonlite::read_json(proof_path, simplifyVector = TRUE)
+  stopifnot(identical(proof$candidate_sha256, manifest$tarball_sha256),
+            identical(proof$status, "MAINTAINED_SOURCE_IDENTITY_PARENT_REVIEWED"))
+  source <- file.path(workspace, "maintained-source")
+  stopifnot(dir.exists(source), !dir.exists(file.path(source, ".git")))
+  actual <- sort(list.files(source, recursive = TRUE, all.files = TRUE,
+                            no.. = TRUE, include.dirs = FALSE))
+  stopifnot(identical(actual, sort(proof$files$path)), !any(nzchar(Sys.readlink(file.path(source, actual)))))
+  for (i in seq_len(nrow(proof$files))) {
+    row <- proof$files[i, ]
+    stopifnot(identical(digest::digest(file = file.path(source, row$path), algo = "sha256", serialize = FALSE), row$sha256))
+  }
+  # Do not mutate the checkout: initialize a fresh copy, then make the actual clone.
+  repository <- file.path(getwd(), "reviewed-source-repository")
+  stopifnot(!file.exists(repository), dir.create(repository))
+  for (path in actual) {
+    target <- file.path(repository, path)
+    dir.create(dirname(target), recursive = TRUE, showWarnings = FALSE)
+    stopifnot(file.copy(file.path(source, path), target, overwrite = FALSE))
+  }
   git <- function(args) stopifnot(system2(Sys.which("git"), args) == 0L)
-  git(c("-C", shQuote(source), "init"))
-  git(c("-C", shQuote(source), "config", "core.autocrlf", "false"))
-  git(c("-C", shQuote(source), "add", "--all"))
-  git(c("-C", shQuote(source), "-c", "user.name=Validation", "-c", "user.email=validation@example.invalid", "commit", "-m", "Exact-candidate"))
+  git(c("-C", shQuote(repository), "init"))
+  git(c("-C", shQuote(repository), "config", "core.autocrlf", "false"))
+  git(c("-C", shQuote(repository), "add", "--all"))
+  git(c("-C", shQuote(repository), "-c", "user.name=Validation", "-c", "user.email=validation@example.invalid", "commit", "-m", "Reviewed-maintained-source"))
   package <- file.path(getwd(), "clone")
-  git(c("clone", "--no-hardlinks", shQuote(source), shQuote(package)))
-  for (i in seq_len(nrow(manifest$archive_files))) {
-    row <- manifest$archive_files[i, ]
+  git(c("clone", "--no-hardlinks", shQuote(repository), shQuote(package)))
+  for (i in seq_len(nrow(proof$files))) {
+    row <- proof$files[i, ]
     stopifnot(identical(digest::digest(file = file.path(package, row$path), algo = "sha256", serialize = FALSE), row$sha256))
   }
+  file.copy(proof_path, "maintained-source-manifest.json", overwrite = FALSE)
+
 }
 error <- NULL
 value <- tryCatch(if (mode == "GitClone") BiocCheck::BiocCheckGitClone(package = package)

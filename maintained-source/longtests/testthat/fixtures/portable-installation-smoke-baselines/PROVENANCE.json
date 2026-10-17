@@ -1,0 +1,31 @@
+{
+  "source_revision": "r1",
+  "source_architecture": "x86_64",
+  "source_candidate_sha256": "2759ef3ec395b6b55c0dfe16633bd304ce8b2e36b175cd3c7bbb8d73acce6815",
+  "source_run_id": "38452835912",
+  "source_zip_path": "revisions/r1/artifacts/macos-x86_64-38452835912-1/original.zip",
+  "source_zip_sha256": "2e69cf6770d9f9f3e930c7f0befcac2cd1a2edb9baee6a6bb4e38c828ca26838",
+  "files": [
+    {
+      "file": "raw-results.tsv",
+      "source_zip_member": "longtests-default/test-evidence/installation-smoke-inference/raw-results.tsv",
+      "bytes": 14516,
+      "sha256": "2a67b5b787ba776c8b70b9352d95025d3f9a0deb94369fec18a213021f209e77",
+      "rows": 48
+    },
+    {
+      "file": "hypothesis-family.tsv",
+      "source_zip_member": "longtests-default/test-evidence/installation-smoke-inference/hypothesis-family.tsv",
+      "bytes": 5591,
+      "sha256": "e436a8044ad920469264cd23f56a78e2dce757a00396f3c69d463f177f432d04",
+      "rows": 48
+    },
+    {
+      "file": "category-results.tsv",
+      "source_zip_member": "longtests-default/test-evidence/installation-smoke-inference/category-results.tsv",
+      "bytes": 9310,
+      "sha256": "c757c32487d23a2af8559fb1200dac93db93c31265a0a6d2761fb75e4b724a77",
+      "rows": 16
+    }
+  ]
+}

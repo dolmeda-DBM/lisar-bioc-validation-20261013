@@ -18,28 +18,42 @@ concurrency:
   cancel-in-progress: false
 jobs:
   native:
-    name: Native ${{ matrix.platform }} full Bioconductor validation
+    name: Native ${{ matrix.platform }} full Bioconductor validation / ${{ matrix.phase }}
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 6
       matrix:
         include:
           - runner: ubuntu-24.04
+            phase: core
             platform: linux-x86_64
             machine: x86_64
             python: python3
           - runner: macos-15-intel
+            phase: core
             platform: macos-x86_64
             machine: x86_64
             python: python3
           - runner: macos-15
+            phase: core
             platform: macos-arm64
             machine: arm64
             python: python3
           - runner: windows-2025
+            phase: core
             platform: windows-x86_64
             machine: AMD64
             python: python
+          - runner: ubuntu-24.04
+            phase: ordinary-offline
+            platform: linux-x86_64
+            machine: x86_64
+            python: python3
+          - runner: ubuntu-24.04
+            phase: longtests-offline
+            platform: linux-x86_64
+            machine: x86_64
+            python: python3
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     defaults:
@@ -49,6 +63,7 @@ jobs:
       execution_priority: low
       LISAR_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
       LISAR_EXPECTED_ARCH: ${{ matrix.machine }}
+      LISAR_VALIDATION_PHASE: ${{ matrix.phase }}
       LISAR_RUNTIME_PLATFORM: ${{ matrix.platform }}
       EXPECTED_HEAD_SHA: ${{ inputs.expected_head_sha }}
       EXPECTED_CANDIDATE_SHA256: ${{ inputs.expected_candidate_sha256 }}
@@ -98,11 +113,11 @@ jobs:
         run: ${{ matrix.python }} ci/bioc_runner.py tex
       - name: Clean build with evaluated vignettes
         id: build
-        if: ${{ always() && steps.provision.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'core' && steps.provision.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py build
       - name: Clean separate installation of exact tarball
         id: install
-        if: ${{ always() && steps.provision.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'core' && steps.provision.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py install
       - name: Native parse and adversarial portability contract
         id: portable
@@ -110,31 +125,31 @@ jobs:
         run: ${{ matrix.python }} ci/bioc_runner.py portable
       - name: Native full R CMD check including manual and vignettes
         id: ordinary
-        if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'core' && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py check ordinary-default
       - name: Native longtests full check on same tarball
         id: longtests
-        if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'core' && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py check longtests-default
       - name: Reference check without rebuilding vignettes
         id: reference
-        if: ${{ always() && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'core' && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py check reference-default
       - name: Complete online BiocCheckGitClone (exact local clone)
         id: gitclone
-        if: ${{ always() && steps.provision.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'core' && steps.provision.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py GitClone
       - name: Complete online BiocCheck (no omitted checks)
         id: bioccheck
-        if: ${{ always() && steps.provision.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'core' && steps.provision.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py BiocCheck
       - name: Full Linux check repeated in network namespace
         id: offline
-        if: ${{ always() && runner.os == 'Linux' && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'ordinary-offline' && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py check ordinary-offline
       - name: Linux longtests repeated in network namespace
         id: longoffline
-        if: ${{ always() && runner.os == 'Linux' && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
+        if: ${{ always() && matrix.phase == 'longtests-offline' && steps.provision.outcome == 'success' && steps.portable.outcome == 'success' }}
         run: ${{ matrix.python }} ci/bioc_runner.py check longtests-offline
       - name: Preserve exact stage outcomes
         if: ${{ always() && steps.initialize.outcome == 'success' }}
@@ -148,7 +163,7 @@ jobs:
         if: ${{ always() && steps.initialize.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: bioc-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: bioc-${{ matrix.platform }}-${{ matrix.phase }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.LISAR_VALIDATION_ROOT }}/evidence/
           include-hidden-files: true
           if-no-files-found: error

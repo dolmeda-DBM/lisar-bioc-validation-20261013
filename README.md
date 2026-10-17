@@ -20,12 +20,17 @@ Each architecture runs independent native commands on the exact input tarball:
 - Ordinary `R CMD check`, with default check flags.
 - BBS-route `R CMD check --test-dir=longtests`, even if ordinary fails.
 - Reference `R CMD check --no-build-vignettes` in addition to the full check.
-- Clean build and installation, full BiocCheckGitClone on an exact local clone,
+- Clean build and installation, full BiocCheckGitClone on a separately reviewed
+  maintained-source clone (never a tarball-derived export),
   and BiocCheck on the candidate tarball, with no checks excluded.
 - Actual PDF/manual toolchain preflight, recorded independently of test execution.
 
 Linux repeats ordinary checks and longtests in fresh network namespaces with
 explicit isolation evidence. Other-platform runs do not claim network isolation.
+The Linux online/core, ordinary-offline and longtests-offline phases are three
+independent hosted jobs with separate immutable evidence artifacts. A later offline
+timeout cannot erase a previously uploaded core or ordinary-offline artifact.
+All three phases remain required; splitting does not reuse a prior platform PASS.
 Linux records elapsed time and native peak resident memory. Old platform PASS
 results are not reused for a changed candidate. This is validation, not submission.
 
@@ -34,6 +39,10 @@ return codes and incomplete evidence remain visible; a green workflow is not
 a claim of Bioconductor acceptance. Errors block readiness; warnings and notes
 remain visible and require review. Avoidable warnings must be resolved, and any
 remaining warnings justified without claiming they are accepted by Bioconductor.
+
+Maintained-source provenance must be verified separately before this revision can
+be launched. The harness refuses a missing proof instead of stripping generated
+fields or documentation from a built package to pass a source-repository check.
 
 ### Shiny scope
 

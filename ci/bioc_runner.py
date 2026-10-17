@@ -5,6 +5,7 @@ import runner as native
 import cross_runner as cross
 import bioc_check
 import evidence_decode
+import build_identity
 
 WORKFLOW = '.github/workflows/bioconductor-validation.yml'
 PLATFORMS = {'linux-x86_64': ('Linux', 'x86_64'), 'windows-x86_64': ('Windows', 'AMD64'),
@@ -24,6 +25,8 @@ def guard():
     config, manifest, tarball = native.inputs()
     assert config['allow_shiny_backend'] is True and not config['backend_supplement_when_shiny_excluded']
     assert manifest['tarball_sha256'] == os.environ['EXPECTED_CANDIDATE_SHA256']
+    phase = os.environ['LISAR_VALIDATION_PHASE']
+    assert phase in (('core','ordinary-offline','longtests-offline') if platform.system() == 'Linux' else ('core',))
     return config, manifest, tarball
 
 def initialize():
@@ -33,7 +36,8 @@ def initialize():
     data = json.loads((root / 'run-intent.json').read_text())
     data.update(workflow_path=WORKFLOW, validation_profile='bioconductor-readiness-full-v1',
         provision_source_sha256=native.sha('ci/provision-bioc.R'),
-        prior_platform_passes_reused=False, submission_authorized=False)
+        prior_platform_passes_reused=False, submission_authorized=False,
+        validation_phase=os.environ['LISAR_VALIDATION_PHASE'])
     native.record(root / 'run-intent.json', data)
 
 def invoke(command, argv, env=None):
@@ -64,10 +68,21 @@ def r_driver(command):
 
 def unit(command):
     config, manifest, tarball = guard()
+    assert os.environ['LISAR_VALIDATION_PHASE'] == 'core'
     root = native.owned_root()
     executable = os.environ['LISAR_R_EXECUTABLE']
     if command == 'build':
-        code = invoke(command, [executable, 'CMD', 'build', str(root/'input/lisaR')])
+        # Build from the reviewed maintained source, as Bioconductor builds from Git.
+        proof = json.loads(Path('candidate/maintained-source-manifest.json').read_text())
+        assert proof['candidate_sha256'] == manifest['tarball_sha256']
+        assert proof['status'] == 'MAINTAINED_SOURCE_IDENTITY_PARENT_REVIEWED'
+        source = root/'s'/'lisaR'
+        assert not source.parent.exists(), 'No retry/overwrite'
+        shutil.copytree(Path('maintained-source'), source)
+        copied = {q.relative_to(source).as_posix(): native.sha(q) for q in source.rglob('*') if q.is_file()}
+        assert not any(q.is_symlink() for q in source.rglob('*'))
+        assert copied == {f['path']: f['sha256'] for f in proof['files']}, 'Maintained source drift'
+        code = invoke(command, [executable, 'CMD', 'build', str(source)])
         built = root/'build/lisaR_0.99.0.tar.gz'
         if built.exists():
             import tarfile
@@ -75,16 +90,13 @@ def unit(command):
                 files = {m.name.removeprefix('lisaR/'): native.hashlib.sha256(archive.extractfile(m).read()).hexdigest()
                          for m in archive.getmembers() if m.isfile()}
             expected = {f['path']:f['sha256'] for f in manifest['archive_files']}
-            changed = [p for p in expected if files.get(p) != expected[p]]
-            # R CMD build regenerates package metadata, MD5 and inst/doc.
-            # Record every difference; byte-pin all non-packaging source.
-            packaging = lambda p: p in ('DESCRIPTION', 'MD5') or p.startswith('inst/doc/')
-            unapproved = [p for p in changed if not packaging(p)]
-            native.record(root/'build/source-identity.json', {'changed_or_missing_shipped_files': changed,
-                'nonpackaging_source_changes': unapproved,
-                'added_build_files': sorted(set(files)-set(expected)), 'built_tarball_sha256':native.sha(built),
-                'packaging_differences_require_owner_review':True, 'checked_tarball_is_original_exact_candidate':True})
-            if unapproved: code = code or 1
+            identity = build_identity.compare(expected, files)
+            native.record(root/'build/source-identity.json', {**identity,
+                'built_tarball_sha256':native.sha(built),
+                'packaging_differences_require_owner_review':True,
+                'checked_tarball_is_original_exact_candidate':True})
+            if identity['nonpackaging_source_changes'] or identity['unapproved_added_files']:
+                code = code or 1
         else: code = code or 1
     elif command == 'install':
         lib = root/'install-library'; assert not lib.exists(); lib.mkdir()
@@ -128,7 +140,7 @@ def collect():
             shutil.copy2(path, target)
             inventory['files'].append({'path':relative.as_posix(), 'bytes':target.stat().st_size, 'sha256':native.sha(target)})
     inventory.update(workflow_path=WORKFLOW, platform_key=os.environ['LISAR_RUNTIME_PLATFORM'],
-                     schema='lisar-full-bioc-evidence-v1')
+                     schema='lisar-full-bioc-evidence-v1', validation_phase=os.environ['LISAR_VALIDATION_PHASE'])
     native.record(manifest_path, inventory)
     path = destination/'results.json'
     value = json.loads(path.read_text())
@@ -157,7 +169,18 @@ if __name__ == '__main__':
     command = sys.argv[1]
     if command == 'initialize': initialize()
     elif command in ('provision','portable','tex-setup','tex'): r_driver(command)
-    elif command == 'check': bioc_check.check(sys.argv[2])
+    elif command == 'verify-root':
+        guard()
+        root = native.owned_root()
+        assert root == Path('/private/tmp/l') and not root.is_symlink()
+        intent = json.loads((root/'run-intent.json').read_text())
+        assert intent['head_sha'] == os.environ['GITHUB_SHA']
+        assert intent['candidate_sha256'] == os.environ['EXPECTED_CANDIDATE_SHA256']
+        assert str(intent['run_id']) == os.environ['GITHUB_RUN_ID']
+    elif command == 'check':
+        stage = sys.argv[2]; phase = os.environ['LISAR_VALIDATION_PHASE']
+        assert stage in (bioc_check.STAGES[:3] if phase == 'core' else (phase,))
+        bioc_check.check(stage)
     elif command in ('build','install','GitClone','BiocCheck'): unit(command)
     elif command == 'collect': collect()
     elif command == 'outcomes': outcomes()

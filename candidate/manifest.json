@@ -1,6 +1,6 @@
 {
   "tarball": "candidate/lisaR_0.99.0.tar.gz",
-  "tarball_sha256": "ab7be44dba275337896e86d360abe7ea24dbd89d3c1cad7d80d4461dcdb682f6",
+  "tarball_sha256": "994db0e5af9b3e8065b13e72570503a78970a6e0f309e174ea0e87921f2daeb6",
   "R_version": "4.6.1",
   "Bioconductor_version": "3.24",
   "testthat_version": "3.3.2",
@@ -12,8 +12,8 @@
   "archive_files": [
     {
       "path": "DESCRIPTION",
-      "bytes": 2192,
-      "sha256": "4ac38a05cd16b86a80d8e9cb9389018d14152537449a065ce7c1b6e83304c5fd"
+      "bytes": 2203,
+      "sha256": "ed696f31e819daeac12430e9cea698dff23bcfef0c64d501044ea31c7a7df9b9"
     },
     {
       "path": "NAMESPACE",
@@ -297,8 +297,8 @@
     },
     {
       "path": "R/rng_contract.R",
-      "bytes": 20753,
-      "sha256": "21a2d3d6bc328995ba50c4dae387cf63062133b698ea9b02b831dad67a1604d4"
+      "bytes": 20764,
+      "sha256": "5c570abf6e8a7e5f714f70712a6ab3389551251fe65431f098a2204a549fdf35"
     },
     {
       "path": "R/run_LISA_DE.R",
@@ -407,18 +407,18 @@
     },
     {
       "path": "inst/doc/configuration-resources-and-execution.R",
-      "bytes": 8503,
-      "sha256": "abe0420ddaf5105e65132a3e5454b73e7d6c20b8134c8857c26d0b9a83f71d44"
+      "bytes": 8518,
+      "sha256": "e2b2cad18eb2e3464e5aafca30bc3c4a8697c9af6aedf9834223f2abc8c30d83"
     },
     {
       "path": "inst/doc/configuration-resources-and-execution.Rmd",
-      "bytes": 77611,
-      "sha256": "0ff21b910518d172e836520d03dbb0dee6b8b8abc9d560d8f8d5dbc486e03a2a"
+      "bytes": 77624,
+      "sha256": "fd736d8311b40a2dfdb4a12cb27f53770cc8c82f2ff334115b1ce5a84ffb5ad0"
     },
     {
       "path": "inst/doc/configuration-resources-and-execution.html",
-      "bytes": 294468,
-      "sha256": "0843a15e80aa86973459cb9fe0bd2b9b0ce510e58cbffbb315d52ecfe7168a8c"
+      "bytes": 294472,
+      "sha256": "b58015178eb01d2597fc7fedc52cd5396924c447d41401377177ed6a100d56c6"
     },
     {
       "path": "inst/doc/custom-dictionaries-and-supercategories.R",
@@ -557,18 +557,18 @@
     },
     {
       "path": "inst/doc/functions-and-workflows.R",
-      "bytes": 7899,
-      "sha256": "2c6a1b7a69754eaed7294aa39687ad6649f7aaa688b3045190f35c87c3adf0f2"
+      "bytes": 7951,
+      "sha256": "fd4c59d0c12fa39541b5780975f264a09e3c89b080a19af81cdaccac3d76aa2a"
     },
     {
       "path": "inst/doc/functions-and-workflows.Rmd",
-      "bytes": 41477,
-      "sha256": "fd4e5d96376e9118ad9cabce586df4b2968fd4f897dd73021ce2687099ebbb02"
+      "bytes": 41529,
+      "sha256": "b2a6459c789cf40ef8d09882eeb18862084640cd2d5d19b9260c93942912b69a"
     },
     {
       "path": "inst/doc/functions-and-workflows.html",
-      "bytes": 96502,
-      "sha256": "d1520d069fe2d71b2b2584a77aeb0fbb84e689ec490cee0e7c8e32876250595e"
+      "bytes": 96566,
+      "sha256": "1318284ecc55e5745a3d2344d029a2b1cf7ba823691ed8370750bd6d2047e032"
     },
     {
       "path": "inst/doc/how-lisar-works.R",
@@ -582,8 +582,8 @@
     },
     {
       "path": "inst/doc/how-lisar-works.html",
-      "bytes": 435347,
-      "sha256": "cf457a7c18c63ea913e4d42887110ef90178d22b6847921cc3d8bdf64ffaf602"
+      "bytes": 435296,
+      "sha256": "4876bd75bc8eed35ad626b83b6a98c7af32df0d68ccd2b9f94563a3f0e64d1f1"
     },
     {
       "path": "inst/doc/preparing-and-analysing-your-data.R",
@@ -612,8 +612,8 @@
     },
     {
       "path": "inst/doc/reports-and-exploration.html",
-      "bytes": 321795,
-      "sha256": "2ef52f21dde988b0c9a78cebaedf8fed85b2b58a1ed53a064c373d11034c354f"
+      "bytes": 321607,
+      "sha256": "33696035a195b9d4dc3c0c273ad9bfa346553a6a5a193882d5e74025f9b88bc2"
     },
     {
       "path": "inst/doc/start-with-lisar.R",
@@ -627,8 +627,8 @@
     },
     {
       "path": "inst/doc/start-with-lisar.html",
-      "bytes": 359004,
-      "sha256": "cc2ad5b338fb0768eb868ee093d080e11e646edcfe087b4848663b5b838dd9e7"
+      "bytes": 358707,
+      "sha256": "9776ff221c35bafcfe2b16d7728383f5671eae242bd4a68437cb08b80c4d513f"
     },
     {
       "path": "inst/doc/vignette-layout.inc",
@@ -647,8 +647,8 @@
     },
     {
       "path": "inst/doc/worked-examples.html",
-      "bytes": 1211079,
-      "sha256": "0a950eeb5714d279055dba6dbc55a130cd45d385ba35341fd371fc9217203031"
+      "bytes": 1210977,
+      "sha256": "e5d0091ed0874351c28a51c7b59b8fdbb4999f131630f895cc0f1aad50dc2029"
     },
     {
       "path": "inst/examples/cptac-ccrcc/README.md",
@@ -1187,8 +1187,8 @@
     },
     {
       "path": "inst/standalone/dependency-profiles.tsv",
-      "bytes": 1188,
-      "sha256": "f2e162cc10278375ae8b1cc3910053d72c7c86da3f45042cf3621f577a183d87"
+      "bytes": 1236,
+      "sha256": "9ce129c5af2201e5351dbcdb5f571ca86609e956216a6d8a8e8e4b43f830badc"
     },
     {
       "path": "inst/standalone/install_lisaR.R",
@@ -2307,8 +2307,8 @@
     },
     {
       "path": "tests/testthat/test-standalone-installer.R",
-      "bytes": 2339,
-      "sha256": "af38cc41ad52c6cc6beb8fd5994d7feede85feea808230ab26da80ad9c6cc703"
+      "bytes": 2348,
+      "sha256": "4ee1680df1aef93967586439f6bef2245b1d2bdd3ecea6bac1043436f989654e"
     },
     {
       "path": "tests/testthat/test-subprocess-environment-portability.R",
@@ -2372,8 +2372,8 @@
     },
     {
       "path": "vignettes/configuration-resources-and-execution.Rmd",
-      "bytes": 77611,
-      "sha256": "0ff21b910518d172e836520d03dbb0dee6b8b8abc9d560d8f8d5dbc486e03a2a"
+      "bytes": 77624,
+      "sha256": "fd736d8311b40a2dfdb4a12cb27f53770cc8c82f2ff334115b1ce5a84ffb5ad0"
     },
     {
       "path": "vignettes/custom-dictionaries-and-supercategories.Rmd",
@@ -2502,8 +2502,8 @@
     },
     {
       "path": "vignettes/functions-and-workflows.Rmd",
-      "bytes": 41477,
-      "sha256": "fd4e5d96376e9118ad9cabce586df4b2968fd4f897dd73021ce2687099ebbb02"
+      "bytes": 41529,
+      "sha256": "b2a6459c789cf40ef8d09882eeb18862084640cd2d5d19b9260c93942912b69a"
     },
     {
       "path": "vignettes/how-lisar-works.Rmd",
@@ -2551,6 +2551,39 @@
     ],
     "reason": "Shorter synthetic fixture parent; production 240 UTF-16 guard and all assertions unchanged",
     "production_unchanged": true,
+    "all_prior_platform_passes_require_rerun": true
+  },
+  "bioc_source_revision": {
+    "baseline_candidate_sha256": "ab7be44dba275337896e86d360abe7ea24dbd89d3c1cad7d80d4461dcdb682f6",
+    "reason": "BiocCheck findings from run 38849453907: vignette installation-call pattern and set.seed in R code; tarball rebuilt from maintained-source with R CMD build (R 4.6.1, bioconductor_docker:devel)",
+    "source_changed_paths": [
+      "DESCRIPTION",
+      "R/rng_contract.R",
+      "inst/standalone/dependency-profiles.tsv",
+      "tests/testthat/test-standalone-installer.R",
+      "vignettes/configuration-resources-and-execution.Rmd",
+      "vignettes/functions-and-workflows.Rmd"
+    ],
+    "archive_changed_paths": [
+      "DESCRIPTION",
+      "R/rng_contract.R",
+      "inst/doc/configuration-resources-and-execution.R",
+      "inst/doc/configuration-resources-and-execution.Rmd",
+      "inst/doc/configuration-resources-and-execution.html",
+      "inst/doc/functions-and-workflows.R",
+      "inst/doc/functions-and-workflows.Rmd",
+      "inst/doc/functions-and-workflows.html",
+      "inst/doc/how-lisar-works.html",
+      "inst/doc/reports-and-exploration.html",
+      "inst/doc/start-with-lisar.html",
+      "inst/doc/worked-examples.html",
+      "inst/standalone/dependency-profiles.tsv",
+      "tests/testthat/test-standalone-installer.R",
+      "vignettes/configuration-resources-and-execution.Rmd",
+      "vignettes/functions-and-workflows.Rmd"
+    ],
+    "rng_stream_equivalence": "withr::with_seed(.rng_kind=L'Ecuyer-CMRG) inside lisa_preserve_rng yields identical draws and identical caller RNG state to the previous RNGkind()+set.seed() body; verified locally over 24 kind/seed/task combinations",
+    "scientific_oracles_unchanged": true,
     "all_prior_platform_passes_require_rerun": true
   }
 }

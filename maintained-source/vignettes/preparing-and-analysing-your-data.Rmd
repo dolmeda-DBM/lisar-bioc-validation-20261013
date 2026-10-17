@@ -1,0 +1,803 @@
+---
+title: "Preparing and analysing your data"
+lang: en-GB
+output:
+  rmarkdown::html_vignette:
+    mathjax: null
+    includes:
+      in_header: vignette-layout.inc
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Preparing and analysing your data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+## Prepare DESeq2, limma or edgeR results for lisaR {#preparing-de-inputs--introduction}
+
+
+Start with the complete result table from a differential-expression model that
+you have already fitted. This guide shows two routes:
+
+- use your exported table directly and name its columns in the lisaR study
+  file; or
+- use `prepare_lisa_de_input()` to create standard column names and a
+  row-level audit.
+
+The adapter is optional. It does not fit a model, choose a comparison or prove
+which software produced a table.
+
+The worked tables below are small fictional examples. The gene names make the
+code easy to follow, but the numbers are not measurements. Use your complete
+tested table for a real study.
+
+<span id="choose-the-direct-or-adapted-route"></span>
+
+### Choose the direct or adapted route {#preparing-de-inputs--choose-the-direct-or-adapted-route}
+
+Your input needs one row per gene and these five values:
+
+| Value | What to supply |
+|---|---|
+| Gene identifier | A non-empty identifier that matches the TERM2GENE membership resource. |
+| Effect | The model's effect for the chosen comparison, such as `log2FoldChange` or `logFC`. |
+| Signed ranking statistic | A statistic for the same comparison, ordered towards the declared positive direction. |
+| P-value | The unadjusted p-value from the fitted model. |
+| Adjusted p-value | The model's adjusted p-value for the complete tested population. |
+
+If the exported table already contains these values, save it as TSV and point
+`symbol_col`, `logfc_col`, `rank_col`, `pvalue_col` and `padj_col` to
+the existing names in the study file. A DESeq2 Wald `stat` or a limma
+moderated `t` can be used directly. You do not need to create
+`rank_value`.
+
+Use the adapter when standard names or its audit will make the hand-off
+clearer. It returns `symbol`, `log2FoldChange`, `rank_value`, `pvalue`
+and `padj`, ready to be named in a study file. The adapter works on an
+exported data frame without loading DESeq2, limma or edgeR.
+
+<span id="state-the-comparison-and-positive-direction"></span>
+
+### State the comparison and positive direction {#preparing-de-inputs--state-the-comparison-and-positive-direction}
+
+Before saving either form, write down the model comparison and what a positive
+effect means. The signed statistic must describe the same comparison. Keep the
+producing software, model specification and original export with the prepared
+file.
+
+| Input | Suitable starting point | What not to infer |
+|---|---|---|
+| DESeq2 Wald result | Signed `stat` for the stated coefficient/contrast | A DESeq2 likelihood-ratio `stat` need not be signed |
+| limma one-contrast result | Signed moderated `t` | A multi-coefficient F statistic does not have one direction |
+| edgeR one-contrast result | An explicitly declared signed ranking derived for that contrast | The adapter cannot infer direction from unsigned F/LR |
+| Any result | Complete tested table, with original adjusted p-values | A significant-only table is not the GSEA universe |
+
+Use the complete tested table rather than filtering to `padj < 0.05` before
+GSEA. Non-significant genes remain part of the ordered background against
+which a set is evaluated. Retain the adjusted p-values calculated for the
+original tested population.
+
+<span id="adapt-a-deseq2-style-wald-table"></span>
+
+### Adapt a DESeq2-style Wald table {#preparing-de-inputs--adapt-a-deseq2-style-wald-table}
+
+This fictional result has six tested genes. One has no statistic and another
+has a finite ranking but no adjusted p-value, illustrating why absence of an
+adjusted p-value should not silently remove a row from the saved table.
+
+```{r deseq2-table, eval=TRUE}
+library(lisaR)
+
+wald <- data.frame(
+  gene = c("CXCL9", "GZMB", "MKI67", "TCF7", "IL7R", "CCR7"),
+  log2FoldChange = c(1.4, 0.8, -0.7, 0.15, -0.2, NA_real_),
+  stat = c(4.2, 2.1, -2.8, 0.4, -0.6, NA_real_),
+  pvalue = c(0.00003, 0.036, 0.005, 0.69, 0.55, NA_real_)
+)
+wald$padj <- p.adjust(wald$pvalue, method = "BH")
+wald$padj[5L] <- NA_real_  # Illustrative missing adjusted p-value.
+
+prepared <- prepare_lisa_de_input(
+  wald,
+  method = "DESeq2",
+  columns = list(symbol = "gene"),
+  positive_direction = "treated relative to control",
+  matrix_scale = "transformed"
+)
+prepared$data
+
+stopifnot(
+  nrow(prepared$data) == nrow(wald),
+  identical(prepared$data$rank_value, wald$stat),
+  is.na(prepared$data$padj[5L]),
+  prepared$row_audit$rank_eligible[5L],
+  !prepared$row_audit$rank_eligible[6L]
+)
+```
+
+The output columns are `symbol`, `log2FoldChange`, `rank_value`, `pvalue` and
+`padj`. No threshold has been applied. The missing statistic remains missing;
+it is not replaced by zero. `rank_eligible` records a finite ranking value,
+not biological validity or every downstream eligibility condition.
+
+Inspect what the adapter actually declared:
+
+```{r input-audit, eval=TRUE}
+prepared$column_mapping
+prepared$row_audit[c(
+  "source_row", "source_id", "retained", "rank_eligible",
+  "missing_rank", "missing_padj"
+)]
+prepared$receipt[c(
+  "declared_method", "positive_direction", "rank_source",
+  "significance_filter", "producing_software_verified"
+)]
+```
+
+`producing_software_verified` is false because a data frame cannot establish
+which software fitted its model. Retain the original table and model records;
+the adapter's receipt is an input declaration, not independent provenance.
+
+For real DESeq2 results, export the complete result for the intended contrast,
+then convert it as above. Do not combine a statistic for one coefficient with
+an effect from another. For likelihood-ratio results, choose and justify a
+compatible signed statistic separately rather than relabelling an unsigned
+statistic.
+
+<span id="adapt-a-limma-result-with-its-moderated-t-statistic"></span>
+
+### Adapt a limma result with its moderated t statistic {#preparing-de-inputs--adapt-a-limma-result-with-its-moderated-t-statistic}
+
+For one specified limma coefficient or contrast, the conventional effect and
+p-value columns are recognised. The gene column is still declared explicitly:
+
+```{r limma-table, eval=TRUE}
+limma_table <- data.frame(
+  gene = c("CXCL9", "GZMB", "MKI67", "TCF7"),
+  logFC = c(1.3, 0.7, -0.6, 0.1),
+  t = c(4.8, 2.5, -3.2, 0.3),
+  P.Value = c(0.0001, 0.018, 0.004, 0.77)
+)
+limma_table$adj.P.Val <- p.adjust(limma_table$P.Value, "BH")
+limma_input <- prepare_lisa_de_input(
+  limma_table, method = "limma",
+  columns = list(symbol = "gene"),
+  positive_direction = "treated relative to control"
+)
+stopifnot(
+  identical(limma_input$data$rank_value, limma_table$t),
+  nrow(limma_input$data) == nrow(limma_table)
+)
+limma_input$data
+```
+
+When exporting a real `topTable()`, request all tested rows rather than its
+default small top table, and use the intended single contrast. If biological
+identifiers are in non-default row names, declare
+`columns = list(symbol = ".rownames")`. Default row numbers are not gene IDs.
+
+<span id="declare-a-signed-edger-ranking"></span>
+
+### Declare a signed edgeR ranking {#preparing-de-inputs--declare-a-signed-edger-ranking}
+
+An edgeR F or likelihood-ratio statistic is unsigned. For a **single
+one-degree-of-freedom contrast**, one possible ranking convention is
+`sign(logFC) * sqrt(F)`, using the effect for that same contrast. This is a
+declared ranking transformation, not a new p-value or a claim that it is a
+limma moderated t statistic. The design and test metadata must establish the
+one-contrast restriction; the numbers in an exported table cannot prove it.
+
+The following fictional example explicitly assumes that restriction:
+
+```{r edger-table, eval=TRUE}
+edger_table <- data.frame(
+  symbol = c("CXCL9", "GZMB", "MKI67", "TCF7"),
+  logFC = c(1.2, 0.6, -0.5, 0.1),
+  F = c(16, 6.25, 9, 0.09),
+  PValue = c(0.0008, 0.02, 0.006, 0.77)
+)
+edger_table$FDR <- p.adjust(edger_table$PValue, "BH")
+edger_table$signed_sqrt_F <-
+  sign(edger_table$logFC) * sqrt(edger_table[["F"]])
+
+edger_input <- prepare_lisa_de_input(
+  edger_table, method = "edgeR",
+  columns = list(rank = "signed_sqrt_F"),
+  positive_direction = "treated relative to control"
+)
+stopifnot(
+  identical(edger_input$data$rank_value, edger_table$signed_sqrt_F),
+  identical(edger_input$data$padj, edger_table$FDR)
+)
+edger_input$data
+```
+
+For a multi-degree-of-freedom F or LR test, **do not attach the sign of an
+arbitrarily chosen logFC**. Return to the fitted model and define a meaningful
+one-dimensional contrast, or choose a method appropriate to the original
+multidimensional question. Renaming `F` to `signed_rank` does not make it signed.
+
+The adapter requires the rank mapping for edgeR and rejects conventional
+unsigned F/LR columns and p-value/FDR columns as rankings. It also checks sign
+agreement where both the rank and effect are finite and nonzero. Those checks
+detect some mistakes; they cannot establish that a declared transformation was
+scientifically justified.
+
+<span id="resolve-orientation-missing-values-and-duplicates"></span>
+
+### Resolve orientation, missing values and duplicates {#preparing-de-inputs--resolve-orientation-missing-values-and-duplicates}
+
+<span id="orientation"></span>
+
+#### Orientation {#preparing-de-inputs--orientation}
+
+`positive_direction` describes the effect in words. With the default
+`rank_direction = "same_as_effect"`, the ranking must follow it too. If the
+ranking really encodes the reverse comparison while the effect is correct,
+`rank_direction = "opposite_to_effect"` negates the rank once and records the
+choice. It does not reverse the effect, rename a contrast or repair mixed
+model coefficients.
+
+<span id="missing-values"></span>
+
+#### Missing values {#preparing-de-inputs--missing-values}
+
+The default `na_policy = "retain"` saves missing statistics and records their
+status. `na_policy = "error"` instead rejects them. Missing/empty identifiers,
+infinite values and malformed numbers always fail. Keep model-specific reasons
+such as filtering, non-convergence or independent filtering beside the source
+table; the adapter does not reconstruct them.
+
+<span id="duplicate-identifiers"></span>
+
+#### Duplicate identifiers {#preparing-de-inputs--duplicate-identifiers}
+
+The default is an error, including case-insensitive collisions. Investigate
+whether two rows are transcripts, aliases, repeated exports or distinct
+features mapped to the same gene. Do not average their logFC, statistics or
+p-values.
+
+An explicit row-selection policy is available when it is justified. This toy
+example demonstrates its audit, not a recommended biological rule:
+
+```{r duplicate-audit, eval=TRUE}
+duplicated_source <- rbind(wald, wald[1L, , drop = FALSE])
+selected <- prepare_lisa_de_input(
+  duplicated_source, "DESeq2",
+  columns = list(symbol = "gene"),
+  positive_direction = "treated relative to control",
+  duplicate_policy = list(
+    type = "select", criterion = "max_abs_rank", tie_breaker = "row_number"
+  )
+)
+stopifnot(
+  nrow(selected$full_data) == 7L,
+  nrow(selected$data) == 6L,
+  sum(!selected$row_audit$retained) == 1L
+)
+selected$row_audit[c("source_row", "source_id", "retained")]
+```
+
+The repeated row is preserved in `full_data` and its disposition is recorded.
+On real non-identical duplicates, selecting the largest absolute statistic
+can favour stronger effects. Choose the policy before interpretation and
+retain the mapping/selection evidence. See the input contract in
+[Configuration reference](configuration-resources-and-execution.html#configuration-reference--introduction) for row-level mapping
+policies.
+
+<span id="expression-matrices-are-a-separate-input"></span>
+
+### Expression matrices are a separate input {#preparing-de-inputs--expression-matrices-are-a-separate-input}
+
+The adapter only records `matrix_scale`; it neither reads nor transforms a
+matrix, and that argument is not a YAML configuration field. Use
+`matrix_scale = "transformed"` in the adapter receipt for values already
+transformed, such as VST, rlog or documented log2 expression. Record
+`"count_like"` only for count-like values. This declaration does not itself
+configure downstream heatmaps. Their matrix-path convention is separate; see
+the configuration reference before attaching a matrix. Do not describe VST
+values as raw counts or apply a second log transform by accident.
+
+Match matrix feature IDs to DE IDs, review sample order/annotation, and keep the
+transformation and filtering provenance. An effect/ranking table cannot
+reconstruct sample-level expression. The standard gene-evidence view can show
+DE values without an expression matrix; expression heatmaps need that separate
+input.
+
+<span id="save-the-adapted-table-and-its-audit"></span>
+
+### Save the adapted table and its audit {#preparing-de-inputs--save-the-adapted-table-and-its-audit}
+
+Write the prepared table and its audit into a new directory:
+
+```{r save-prepared, eval=TRUE}
+input_dir <- tempfile("prepared-de-inputs-")
+stopifnot(!file.exists(input_dir))
+dir.create(input_dir)
+
+for (part in c(
+  "data", "full_data", "receipt", "column_mapping",
+  "row_audit", "duplicate_resolution"
+)) {
+  write.table(
+    prepared[[part]], file.path(input_dir, paste0(part, ".tsv")),
+    sep = "\t", quote = FALSE, row.names = FALSE, na = "NA"
+  )
+}
+```
+
+Retain the original source table and model record too: extra columns such as
+model diagnostics are not copied into the canonical data.
+
+The new folder contains the canonical TSV used by lisaR and the audit files
+that explain how it was made. Keep the original export and model record beside
+this folder.
+
+Point the analysis configuration at `data.tsv` with this column mapping. This
+is a fragment to place in the complete study file created in the next guide:
+
+```yaml
+single_de:
+  - analysis_id: treated_vs_control
+    label: Treated versus control
+    comparison: Treated minus control
+    positive_direction: Higher in treated than control
+    de_path: prepared-de-inputs/data.tsv
+    species: Homo sapiens
+    symbol_col: symbol
+    logfc_col: log2FoldChange
+    rank_col: rank_value
+    pvalue_col: pvalue
+    padj_col: padj
+```
+
+For the adapted route, the rank column is now `rank_value`, not the original
+`stat` or `t`. For the direct route, keep the original column name in
+`rank_col`. Relative paths are interpreted from the folder containing the
+configuration file.
+
+The six-row example is too small for a real enrichment analysis. Apply the
+chosen route to your complete tested results, then follow
+[Getting started](preparing-and-analysing-your-data.html#getting-started--introduction) to validate resources, plan,
+run and verify the study.
+
+For supported DESeq2/edgeR objects already in memory, the alternative local API
+is documented in [Function reference](functions-and-workflows.html#function-reference--introduction). It is
+separate from this table-first workflow; no object file needs to be
+deserialised to follow this page.
+
+## Use your own differential-expression table {#use-your-own-de--introduction}
+
+
+Once [Riaz ON](worked-examples.html#riaz-on-quick-start--introduction) runs, replace its table with your own.
+Supply the complete DE result, not only significant genes.
+
+<span id="prepare-the-input"></span>
+
+### Prepare the input {#use-your-own-de--prepare-the-input}
+
+For a DESeq2 table, use these columns:
+
+| Column | Meaning |
+|---|---|
+| `symbol` | Gene symbol matching the gene-set resource. |
+| `log2FoldChange` | Signed effect for your comparison. |
+| `stat` | Signed ranking statistic, normally the Wald statistic. |
+| `pvalue` | Gene-level raw P value. |
+| `padj` | Gene-level adjusted P value. |
+
+Check which group is in the numerator before writing the direction sentence.
+A DESeq2 likelihood-ratio statistic is unsigned; the
+[extended R guide](preparing-and-analysing-your-data.html#getting-started--introduction) explains that case and edgeR/limma
+inputs.
+
+### Run one analysis {#use-your-own-de--run-one-analysis}
+
+This example assumes a human DESeq2 Wald-test result and the resource prepared
+during Riaz ON. If you skipped that optional example, first prepare the
+corresponding membership resource with
+[`prepare_lisa_msigdb_resource()`](functions-and-workflows.html#function-reference--prepare_lisa_msigdb_resource)
+after reviewing its resource terms; see `?prepare_lisa_msigdb_resource`.
+Resource acquisition is a separate manual step, not part of the offline
+synthetic example. Change the two paths and the direction sentence.
+
+```{r own-de, eval=FALSE}
+library(lisaR)
+
+result <- run_lisa(
+  de = "de_treated_vs_control.tsv",
+  output_dir = "lisa-treated-vs-control",
+  species = "Homo sapiens",
+  method = "DESeq2",
+  positive_direction = "Higher in treated than in control"
+)
+
+stopifnot(identical(result$gate, "PASS"))
+check <- verify_lisa_run(result$output_dir)
+stopifnot(identical(check$gate, "PASS"))
+browseURL(result$report_index)
+```
+
+Choose a new output directory. STANDARD is the default; it includes PNG and
+SVG figures, source tables and figure recipes. Add `pdf = TRUE` if needed.
+
+lisaR uses the supplied DE results. It does not re-estimate your effects or fit
+your experimental design. For another species, prepare the corresponding
+[membership resource](configuration-resources-and-execution.html#resources-and-provenance--introduction); do not substitute the
+human resource.
+
+**Next: [Read your report](start-with-lisar.html#read-your-report--introduction).**
+
+## Run lisaR with your prepared files {#getting-started--introduction}
+
+
+For the short first-run route, use [Get started](start-with-lisar.html#quick-start--introduction). This
+guide keeps the extended R examples and configuration options.
+
+Use this guide to run lisaR on your differential-expression results and open
+the HTML report. You do not need to write a configuration file or choose the
+LISA dictionaries. The default output includes PNG and SVG figures, tables
+and R scripts for reproducing the figures.
+
+Install lisaR first, then follow the steps below. If you already use a YAML or
+JSON study file, you can continue to pass it to `run_lisa()`.
+
+If you want to practise without study data, use the self-contained
+[Quick Start](start-with-lisar.html#quick-start--introduction). Its files and resources are synthetic and must
+not be reused as the gene universe for a real study.
+
+<span id="what-you-need"></span>
+
+### What you need {#getting-started--what-you-need}
+
+- a complete differential-expression table, not only the significant rows;
+- one sentence stating what a positive effect means in your comparison; and
+- gene-set memberships for your species, prepared in the first step below.
+
+[Prepare differential-expression inputs](preparing-and-analysing-your-data.html#preparing-de-inputs--introduction) explains the
+table conventions. DESeq2 tables use the usual column names by default.
+For edgeR or limma tables, specify `method = "edgeR"` or `method = "limma"`.
+The ranking statistic must have a sign; the optional input examples below
+show how to declare it.
+
+<span id="prepare-the-gene-set-membership-resource-once"></span>
+
+### 1. Prepare the gene-set membership resource, once {#getting-started--prepare-the-gene-set-membership-resource-once}
+
+lisaR ships its LISA dictionaries and category hierarchy. They assign gene sets
+to biological categories, but they do not contain the genes in each set. That
+membership comes from MSigDB and is prepared once per machine.
+
+Read the [MSigDB terms](https://www.gsea-msigdb.org/gsea/msigdb_license_terms.jsp)
+before running this command. Set `accept_terms = TRUE` only if you accept them.
+
+```{r prepare-membership, eval=FALSE}
+library(lisaR)
+
+msigdb <- prepare_lisa_msigdb_resource(accept_terms = TRUE)
+```
+
+If you already hold an authorised MSigDB ZIP, use the local-file form described
+in [Resources and provenance](configuration-resources-and-execution.html#resources-and-provenance--introduction). Do not point a
+real study at the sample project's 40-gene TERM2GENE resource.
+
+After registration, `run_lisa()` selects the resources for the species you
+specify. If a required resource is missing, it tells you what to prepare
+before starting the analysis.
+
+### 2. Run one analysis {#getting-started--run-one-analysis}
+
+This is a complete first run. Replace the path, the species and the direction
+sentence with your own.
+
+```{r run-one, eval=FALSE}
+result <- run_lisa(
+  de                 = "de_treated_vs_control.tsv",
+  output_dir         = "lisa-treated-vs-control",
+  species            = "Homo sapiens",
+  positive_direction = "higher in treated than in control"
+)
+
+```
+
+`de` also accepts the data frame itself or a DESeq2 Wald-test
+`DESeqResults` object. With an explicit `positive_direction`, native DESeq2
+results refuse missing or empty mapped symbols; resolve the ID mapping rather
+than silently dropping tested rows. For DESeq2 likelihood-ratio tests and edgeR results,
+see the input examples below. `positive_direction` has no default: lisaR never infers which
+side of a comparison a positive effect belongs to.
+
+Choose a new folder for `output_dir`; lisaR will create it. If an input or
+argument is rejected before the analysis starts, correct it and repeat the
+call with the same folder name.
+
+By default this produces a standard report with PNG and SVG figures, the source
+data tables and the figure reproduction recipes. PDF is off unless you ask for
+it.
+
+The configured `run_lisa()` workflow calculates category inference after the
+gene-set analyses. For each semantic collection, the default category view
+shows adjusted-P stars (up to `****` at P ≤0.0001); the card retains the exact
+P and minimum supported count d/N. This is separate from the descriptive
+mean NES and from a comparison between two completed analyses.
+
+Check that the analysis completed successfully:
+
+```{r verify-one, eval=TRUE}
+# The evaluated verifier uses the accepted distributed synthetic run.
+# For your own analysis, keep result$output_dir from the preceding manual call:
+# check <- verify_lisa_run(result$output_dir)
+# Extract the shipped complete saved run to a new temporary directory.
+fixture_dir <- tempfile("lisa-saved-fixture-")
+dir.create(fixture_dir)
+utils::untar(system.file("extdata", "p5-tiny-scientific-run.tar.gz",
+  package = "lisaR", mustWork = TRUE), exdir = fixture_dir)
+saved_run <- file.path(fixture_dir, "p5-tiny-scientific-run", "run")
+check <- verify_lisa_run(saved_run)
+stopifnot(identical(check$gate, "PASS"))
+check[c("gate", "artifact_type")]
+```
+
+These checks should both return `"PASS"`. Verification checks the saved
+files without repeating the analysis. You can then open the report:
+
+```{r open-one, eval=FALSE}
+browseURL(file.path(result$output_dir, "report_index.html"))
+```
+
+`result$reports` lists the available report pages. Keep the whole output
+folder together when moving or sharing it so that the links continue to work.
+
+If either gate is not `"PASS"`, keep the message and the output folder, and
+follow [Troubleshooting](reports-and-exploration.html#troubleshooting--introduction).
+
+<span id="compare-two-analyses"></span>
+
+### 3. Compare two analyses {#getting-started--compare-two-analyses}
+
+A contrast compares two completed LISA profiles. Declare the orientation
+explicitly: `contrast = c("ON", "PRE")` means **ON minus PRE**. The order of
+`de` never decides it.
+
+```{r run-two, eval=FALSE}
+result <- run_lisa(
+  de = list(
+    PRE = "de_pre_vs_control.tsv",
+    ON  = "de_on_vs_control.tsv"
+  ),
+  output_dir = "lisa-pre-on",
+  species    = "Homo sapiens",
+  positive_direction = list(
+    PRE = "higher at baseline than in its control",
+    ON  = "higher on therapy than in its control"
+  ),
+  contrast = c("ON", "PRE"),
+  title    = "Baseline versus on-therapy"
+)
+
+result$reports[result$reports$page == "contrasts", ]
+```
+
+The contrast page states the declared orientation. A positive value means a
+larger mean NES in `ON` than in `PRE`. That mean is descriptive: it is not a
+category-level significance test, and it is not another
+differential-expression test.
+
+For more than one contrast, supply a list of pairs. Each pair specifies its
+own order.
+
+<span id="optional-settings"></span>
+
+### Optional settings {#getting-started--optional-settings}
+
+The steps above are enough to run an analysis and read its report. The
+sections below cover output options and less common input formats.
+
+<span id="adjust-what-is-produced"></span>
+
+#### Adjust what is produced {#getting-started--adjust-what-is-produced}
+
+The first example needs no output settings. Add options only when you want
+to change what lisaR produces:
+
+```{r adjust, eval=FALSE}
+result <- run_lisa(
+  de                 = "de_treated_vs_control.tsv",
+  output_dir         = "lisa-study",
+  species            = "Homo sapiens",
+  positive_direction = "higher in treated than in control",
+  svg                = FALSE,       # PNG only
+  recipes            = FALSE,       # no figure recipes
+  collections        = c("GOBP-C2", "GOMF"),
+  workers            = 4L
+)
+```
+
+Use `dry_run = TRUE` to inspect a plan without calculating enrichment or
+building the report.
+
+For a new analysis, `mode = "full"` writes one report in the same
+`output_dir`: the standard report plus every applicable FULL figure (member
+gene sets, prioritized genes, volcano overlays, gene heatmaps, recurrent
+genes, contrast profiles and paired products), each placed in its analysis,
+collection and category. FULL can take substantially longer and use several
+gigabytes. To add figures to an existing STANDARD result without repeating
+enrichment, use `plan_lisa_extension()` followed by `render_lisa_categories()`,
+which writes its own gallery, as shown in
+[The HTML report](reports-and-exploration.html#scientific-report--introduction).
+
+For settings without a dedicated argument, use `pipeline` or `report`.
+Unspecified settings keep their defaults:
+
+```{r advanced-overrides, eval=FALSE}
+result <- run_lisa(
+  de                 = "de_treated_vs_control.tsv",
+  output_dir         = "lisa-study",
+  species            = "Homo sapiens",
+  positive_direction = "higher in treated than in control",
+  report             = list(evidence_max_sets = 40L),
+  pipeline           = list(run_hallmarks = TRUE)
+)
+```
+
+Specify each setting in one place: as a direct argument, or inside `pipeline`
+or `report`. Repeating a setting is rejected, even when both values agree.
+
+<span id="tables-that-need-an-explicit-column-mapping"></span>
+
+#### Tables that need an explicit column mapping {#getting-started--tables-that-need-an-explicit-column-mapping}
+
+lisaR reads the usual DESeq2, edgeR and limma column names. Name the columns
+when yours differ, or when the statistic to rank on is not the conventional
+one:
+
+```{r columns, eval=FALSE}
+result <- run_lisa(
+  de                 = "limma_treated_vs_control.tsv",
+  output_dir         = "lisa-limma-study",
+  species            = "Homo sapiens",
+  positive_direction = "higher in treated than in control",
+  method             = "limma",
+  columns            = list(symbol = "gene", rank = "t")
+)
+```
+
+Some ranking statistics have no sign and need an explicit choice:
+
+- a DESeq2 likelihood-ratio result, whose `stat` is unsigned;
+- an edgeR result, whose `F` and `LR` statistics are unsigned.
+
+For an edgeR **one-dimensional comparison**, choose the signed effect size
+as the ranking if that matches your analysis. This complete synthetic example
+fits a model and explicitly selects one treated-versus-control coefficient:
+
+```{r edger, eval=TRUE}
+set.seed(1729)
+group <- factor(rep(c("control", "treated"), each = 3),
+                levels = c("control", "treated"))
+baseline <- seq(40, 240, length.out = 60)
+effects <- rep(c(2, 0.5, 1), length.out = length(baseline))
+means <- vapply(group, function(g)
+  baseline * if (g == "treated") effects else 1, numeric(length(baseline)))
+counts <- matrix(stats::rnbinom(length(means), mu = as.vector(means), size = 8),
+  nrow = length(baseline),
+  dimnames = list(paste0("GENE", seq_along(baseline)),
+                  paste0("sample", seq_along(group))))
+dge <- edgeR::calcNormFactors(edgeR::DGEList(counts = counts, group = group))
+design <- stats::model.matrix(~ group)
+# A fixed dispersion is declared for this synthetic illustration only.
+fit <- edgeR::glmFit(dge, design = design, dispersion = 0.1)
+x <- edgeR::glmLRT(fit, coef = "grouptreated") # exactly one df: treated-control
+tt <- edgeR::topTags(x, n = Inf, sort.by = "none", adjust.method = "BH")
+original <- tt$table
+# Choose signed logFC itself as an effect-size ranking. This is not sign(LR),
+# nor a signed multi-df F statistic. Positive values mean higher in treated.
+tt$table$signed_rank <- tt$table$logFC
+prepared <- prepare_lisa_de_input(tt,
+  columns = list(rank = "signed_rank"),
+  positive_direction = "higher in treated than control")
+stopifnot(identical(tt$table[, names(original), drop = FALSE], original),
+  identical(rownames(prepared$full_data), rownames(original)),
+  identical(prepared$full_data$pvalue, original$PValue),
+  identical(prepared$full_data$padj, original$FDR),
+  nrow(prepared$full_data) == nrow(original))
+
+```
+
+The preparation above is self-contained. After preparing the scientific
+membership resource for your study, the following analysis remains a manual
+template; it is not executed during the offline documentation build.
+
+```{r edger-analysis, eval=FALSE}
+result <- run_lisa(
+  de                 = tt,
+  output_dir         = "lisa-edger-study",
+  species            = "Homo sapiens",
+  positive_direction = "higher in treated than control",
+  columns            = list(rank = "signed_rank")
+)
+```
+
+The signed ranking is your modelling decision; lisaR records it and does not
+derive one for you. Here it is logFC for the declared one-df contrast, not a
+signed F/LR statistic for a joint test.
+
+`topTags()` performs the FDR adjustment chosen in edgeR (BH in this example);
+`n = Inf, sort.by = "none"` passes every tested row in source order.
+`DGEExact` and `DGELRT` are rejected directly in all three DE entry points,
+even if their table has user-added FDR/rank columns. Supply the prepared
+`TopTags` object with your explicit signed ranking and declared direction.
+lisaR does not choose or recalculate its P/FDR values or drop permitted NAs.
+
+For a DESeq2 likelihood-ratio result, do not use its unsigned `stat` as the
+ranking. Add a separately computed signed statistic for the comparison you
+intend to interpret, then select it with `columns = list(rank = "signed_stat")`.
+
+<span id="keep-your-results"></span>
+
+### Keep your results {#getting-started--keep-your-results}
+
+Keep the complete study folder, including `inputs/`, `results/` and
+`study.json`. The JSON file records the settings used and can be passed back
+to `run_lisa()` with its full path.
+
+Keep the whole folder together with your original export and its model record.
+lisaR does not fit or refit the differential-expression model.
+
+If a run fails after creating `study.json`, keep the error message and folder.
+Consult [Troubleshooting](reports-and-exploration.html#troubleshooting--introduction) before retrying the saved
+configuration.
+
+<span id="use-a-configuration-file"></span>
+
+#### Use a configuration file {#getting-started--use-a-configuration-file}
+
+Use a study file when you want to save and edit the complete configuration.
+You can start from the `study.json` created by `run_lisa()`; the
+[configuration reference](configuration-resources-and-execution.html#configuration-reference--introduction) explains its fields.
+
+```{r config-route, eval=TRUE}
+sample_project <- lisa_init_project(tempfile("lisa-input-config-"))
+sample_config <- file.path(sample_project, "study.yml")
+validation <- validate_lisa_config(sample_config, check_files = TRUE)
+validation$readiness
+stopifnot(validation$execution_ready)
+plan <- plan_lisa_outputs(sample_config)
+plan$summary
+# To execute your own reviewed configuration manually:
+# result <- run_lisa("study.yml")
+```
+
+Existing configuration files keep their previous defaults. To include SVG and
+recipes, use this structure:
+
+```yaml
+report:
+  formats:
+    svg: true
+  recipes: true
+```
+
+When passing a configuration file, edit settings in that file rather than
+adding the direct-input arguments to the same call.
+
+<span id="continue-with-a-prepared-scientific-example"></span>
+
+### Continue with a prepared scientific example {#getting-started--continue-with-a-prepared-scientific-example}
+
+The [Riaz RNA-seq example](worked-examples.html#riaz-gse91061-worked-example--introduction) and
+[CPTAC proteomics example](worked-examples.html#cptac-ccrcc-proteomics--introduction) provide prepared DE
+tables, source context and complete study configurations. Follow the instructions for the chosen example. Its gene-set memberships
+belong to that example and should not be used for unrelated studies.
+
+## Session information
+
+The evaluated examples use the R session recorded here. Manual network,
+archive and GUI templates are not claimed as executed by this record.
+
+```{r documentation-session-info, eval=TRUE}
+# Remove only the temporary extracted fixture after the saved-run examples.
+unlink(fixture_dir, recursive = TRUE)
+sessionInfo()
+```

@@ -8,7 +8,11 @@ test "${LISAR_REPOSITORY_PRIVATE:-}" = false
 test "${GITHUB_REPOSITORY:-}" = dolmeda-DBM/lisar-bioc-validation-20261013
 test -n "${LISAR_VALIDATION_ROOT:-}"
 test -d "$LISAR_VALIDATION_ROOT"
-case "$LISAR_VALIDATION_ROOT" in "$RUNNER_TEMP"/lisar-validation-*) ;; *) exit 1 ;; esac
+test "$LISAR_VALIDATION_ROOT" = /private/tmp/l
+test ! -L "$LISAR_VALIDATION_ROOT"
+test "$(cd "$LISAR_VALIDATION_ROOT" && pwd -P)" = /private/tmp/l
+test -f "$LISAR_VALIDATION_ROOT/run-intent.json"
+python3 ci/bioc_runner.py verify-root
 printf '%s\n' 'XQuartz 2.8.6; official checksum-pinned signed pkg; no GUI start' > "$LISAR_VALIDATION_ROOT/xquartz-intent.txt"
 pkg="$LISAR_VALIDATION_ROOT/XQuartz-2.8.6.pkg"
 curl --fail --location --show-error --connect-timeout 30 --max-time 600 --output "$pkg" 'https://github.com/XQuartz/XQuartz/releases/download/XQuartz-2.8.6/XQuartz-2.8.6.pkg'
