@@ -106,13 +106,21 @@ def unit(command):
         code = invoke(command, [shutil.which('Rscript'), '--vanilla', str(Path('ci/bioc-specific.R').resolve()), command])
     raise SystemExit(code)
 
+OFFLINE_SHELL = 'ip link set lo up && U=$1 && P=$2 && shift 2 && exec runuser -u "$U" -- env "PATH=$P" "$@"'
+
 def offline_command(argv):
     # Fresh process and network namespace; no host firewall/agent/network changes.
-    return ['sudo', '-n', '--preserve-env', 'unshare', '--net', '--', 'runuser',
-            '-u', os.environ['USER'], '--'] + argv
+    # Loopback is brought up as on any real host; no external route exists.
+    # sudo's secure_path drops the step PATH (TinyTeX), so carry it explicitly.
+    return ['sudo', '-n', '--preserve-env', 'unshare', '--net', '--', 'sh', '-c', OFFLINE_SHELL,
+            'lisar-offline', os.environ['USER'], os.environ['PATH']] + argv
 
 def namespace_proof(stagepath):
-    code = "import json,os,socket; s=socket.socket(); s.settimeout(2); r=s.connect_ex(('1.1.1.1',443)); print(json.dumps({'namespace':os.readlink('/proc/self/ns/net'),'external_connect_errno':r})); raise SystemExit(0 if r else 1)"
+    code = ("import json,os,shutil,socket; s=socket.socket(); s.settimeout(2); r=s.connect_ex(('1.1.1.1',443)); "
+            "l=socket.socket(); l.bind(('127.0.0.1',0)); l.listen(1); c=socket.socket(); c.settimeout(2); "
+            "lo=c.connect_ex(l.getsockname()); tex=shutil.which('pdflatex'); "
+            "print(json.dumps({'namespace':os.readlink('/proc/self/ns/net'),'external_connect_errno':r,"
+            "'loopback_connect_errno':lo,'pdflatex':tex})); raise SystemExit(0 if r and lo == 0 and tex else 1)")
     result = subprocess.run(offline_command([sys.executable, '-c', code]), capture_output=True, text=True, check=False)
     proof = {'parent_namespace':os.readlink('/proc/self/ns/net'), 'returncode':result.returncode,
              'stdout':result.stdout, 'stderr':result.stderr, 'method':'fresh Linux network namespace'}
@@ -120,6 +128,7 @@ def namespace_proof(stagepath):
     assert result.returncode == 0
     observed = json.loads(result.stdout)
     assert observed['namespace'] != proof['parent_namespace'] and observed['external_connect_errno'] != 0
+    assert observed['loopback_connect_errno'] == 0 and observed['pdflatex']
     return proof
 
 def collect():
